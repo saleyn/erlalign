@@ -1,4 +1,4 @@
-.PHONY: help compile test cover clean publish bump-version retire-version escript escriptize install regenerate
+.PHONY: help compile doc test cover clean publish bump-version retire-version escript escriptize install regenerate
 
 all: compile
 

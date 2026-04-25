@@ -256,15 +256,24 @@ format_code_internal(Content, Opts) ->
       Formatted;
     false ->
       %% Split into lines, remove separators, rejoin
-      Lines = binary:split(Formatted, <<"\n">>, [global]),
-      FilteredLines = lists:filtermap(fun(Line) ->
-        Trimmed = trim_binary(Line),
-        case binary:match(Trimmed, <<"%%----">>) of
-          nomatch -> {true, Line};
-          _ -> false
-        end
-      end, Lines),
-      iolist_to_binary(lists:join(<<"\n">>, FilteredLines))
+      Lines1 = binary:split(Formatted, <<"\n">>, [global]),
+      
+      %% First pass: check if we should remove doc separators
+      RemoveDocSeparators = proplists:get_value(remove_doc_separators, Opts, false),
+      FilteredLines1 = case RemoveDocSeparators of
+        true ->
+          remove_doc_separators(Lines1);
+        false ->
+          %% Just remove normal separator lines
+          lists:filtermap(fun(Line) ->
+            Trimmed = trim_binary(Line),
+            case binary:match(Trimmed, <<"%%----">>) of
+              nomatch -> {true, Line};
+              _ -> false
+            end
+          end, Lines1)
+      end,
+      iolist_to_binary(lists:join(<<"\n">>, FilteredLines1))
   end.
 
 %%--------------------------------------------------------------------
@@ -314,6 +323,47 @@ process_file_internal(InputPath, Opts) when is_list(InputPath); is_binary(InputP
       file:write_file(OutputPath, Formatted);
     {error, Reason} ->
       {error, Reason}
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc Trim leading whitespace from a binary.
+%%--------------------------------------------------------------------
+trim_leading_binary(B) ->
+  case B of
+    <<32, Rest/binary>> -> trim_leading_binary(Rest);  % space
+    <<9, Rest/binary>> -> trim_leading_binary(Rest);   % tab
+    <<13, Rest/binary>> -> trim_leading_binary(Rest);  % carriage return
+    <<10, Rest/binary>> -> trim_leading_binary(Rest);  % newline
+    _ -> B
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc Trim leading whitespace from a line (binary or list).
+%%--------------------------------------------------------------------
+trim_line(Line) ->
+  case Line of
+    B when is_binary(B) ->
+      trim_leading_binary(B);
+    L when is_list(L) ->
+      trim_leading_string(L);
+    _ -> 
+      Line
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc Trim leading whitespace from a string.
+%%--------------------------------------------------------------------
+trim_leading_string(L) ->
+  string:trim(L, leading).
+
+%%--------------------------------------------------------------------
+%% @doc Check if a line is a separator line (%%%%----).
+%%--------------------------------------------------------------------
+is_separator_line(Line) ->
+  Trimmed = trim_line(Line),
+  case re:run(Trimmed, <<"^%+\\-+%*$">>) of
+    {match, _} -> true;
+    nomatch -> false
   end.
 
 %%--------------------------------------------------------------------
@@ -374,41 +424,6 @@ trim_binary_right(B) ->
         10 -> trim_binary_right(binary:part(B, 0, Size - 1));  % newline
         _ -> B
       end
-  end.
-
-%%--------------------------------------------------------------------
-%% @doc Trim leading whitespace from a binary line.
-%%--------------------------------------------------------------------
-trim_line(Line) ->
-  case Line of
-    B when is_binary(B) ->
-      trim_leading_binary(B);
-    L when is_list(L) ->
-      trim_leading_string(L);
-    _ -> 
-      Line
-  end.
-
-trim_leading_binary(B) ->
-  case B of
-    <<32, Rest/binary>> -> trim_leading_binary(Rest);  % space
-    <<9, Rest/binary>> -> trim_leading_binary(Rest);   % tab
-    <<13, Rest/binary>> -> trim_leading_binary(Rest);  % carriage return
-    <<10, Rest/binary>> -> trim_leading_binary(Rest);  % newline
-    _ -> B
-  end.
-
-trim_leading_string(L) ->
-  string:trim(L, leading).
-
-%%--------------------------------------------------------------------
-%% @doc Check if a line is a separator line (%%%%----).
-%%--------------------------------------------------------------------
-is_separator_line(Line) ->
-  Trimmed = trim_line(Line),
-  case re:run(Trimmed, <<"^%+\\-+%*$">>) of
-    {match, _} -> true;
-    nomatch -> false
   end.
 
 %%--------------------------------------------------------------------

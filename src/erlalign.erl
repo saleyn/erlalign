@@ -359,9 +359,6 @@ collect_files(Path) ->
       end
   end.
 
-process_files(Files, FormatOpts, Mode, Silent) ->
-  process_files(Files, FormatOpts, Mode, Silent, false).
-
 process_files(Files, FormatOpts, Mode, Silent, UseDoc) ->
   lists:foldl(fun(File, {Status, Count}) ->
     case process_file(File, FormatOpts, Mode, Silent, UseDoc) of
@@ -370,9 +367,6 @@ process_files(Files, FormatOpts, Mode, Silent, UseDoc) ->
       error -> {error, Count}
     end
   end, {ok, 0}, Files).
-
-process_file(Path, FormatOpts, Mode, Silent) ->
-  process_file(Path, FormatOpts, Mode, Silent, false).
 
 process_file(Path, FormatOpts, Mode, Silent, UseDoc) ->
   case file:read_file(Path) of
