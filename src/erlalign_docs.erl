@@ -2,21 +2,20 @@
 %%% @doc
 %%% EDoc to OTP-27 documentation attribute converter for Erlang.
 %%%
-%%% Converts EDoc-style `@doc' comments and type documentation to OTP-27
-%%% compatible `-doc' attributes. Handles HTML markup conversion to Markdown,
-%%% @see references, and proper attribute formatting.
+%%% Converts EDoc-style @doc comments and type documentation to OTP-27
+%%% compatible -doc attributes. Handles HTML markup conversion to Markdown,
+%%% cross-references, and proper attribute formatting.
 %%%
-%%% ## Options
+%%% Options supported:
 %%%
-%%% Supported options for `format_code/2':
-%%%   - `{line_length, N}' - Width for line wrapping (default: 80, 0 = no wrapping)
-%%%   - `{keep_separators, boolean()}' - Keep %%%%---- lines adjacent to -doc
-%%%     attributes (default: false)
+%%% For format_code/2:
+%%%   - line_length: N - Width for line wrapping (default: 80, 0 = no wrapping)
+%%%   - keep_separators: boolean() - Keep separator lines (default: false)
 %%%
-%%% Supported options for `process_file/2':
-%%%   - `{line_length, N}' - Width for line wrapping (default: 80, 0 = no wrapping)
-%%%   - `{keep_separators, boolean()}' - Keep %%%%---- lines (default: false)
-%%%   - `{output, FilePath}' - Output file path (default: overwrites input file)
+%%% For process_file/2:
+%%%   - line_length: N - Width for line wrapping (default: 80, 0 = no wrapping)
+%%%   - keep_separators: boolean() - Keep separator lines (default: false)
+%%%   - output: FilePath - Output file path (default: overwrites input file)
 %%%
 %%% @end
 %%%-------------------------------------------------------------------

@@ -3,7 +3,7 @@
 %%% Erlang code formatter that applies column alignment on top of erlfmt output.
 %%%
 %%% ErlAlign mirrors ExAlign's functionality for Erlang source code, enabling
-%%% readable column-aligned formatting similar to Go's `gofmt`.
+%%% readable column-aligned formatting similar to Go's gofmt.
 %%%
 %%% @end
 %%%-------------------------------------------------------------------

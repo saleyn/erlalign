@@ -52,11 +52,10 @@ clean:
 	@rm -f erl_crash.dump rebar3.crashdump *.beam
 
 doc docs:
-	@echo "ErlAlign documentation is generated via EDoc. No doc generation target yet."
-	@echo "See README.md for usage information."
+	@rebar3 ex_doc
 
 publish:
-	rebar3 hex.publish$(if $(replace), --replace)
+	rebar3 hex publish$(if $(replace), --replace)
 
 bump-version:
 	@FILE=$$(ls -1 src/*.app.src | head -n1); \
