@@ -161,6 +161,92 @@ rebar3 erlalign_docs --dry-run src/
 | `-s, --silent` | off | Suppress output |
 | `-h, --help` | | Show help message |
 
+### Command-line binary
+
+Build the standalone erlalign binary:
+
+```bash
+# Build binary with make
+make escriptize
+
+# Or with rebar3
+rebar3 escriptize
+```
+
+The binary will be located at `_build/default/bin/erlalign`.
+
+#### Using the binary
+
+Format Erlang files directly from the command line:
+
+```bash
+# Format a single file (modifies in place)
+erlalign src/mymodule.erl
+
+# Format multiple files
+erlalign src/ lib/ test/
+
+# Check formatting without modifying
+erlalign --check src/
+
+# Dry run (preview changes)
+erlalign --dry-run src/mymodule.erl
+
+# Trim trailing whitespace from end of lines (default)
+erlalign --trim-eol-ws src/
+
+# Disable trailing whitespace trimming
+erlalign --no-trim-eol-ws src/
+
+# Set line length
+erlalign --line-length 120 src/
+
+# Handle end-of-file newlines
+erlalign --eol-at-eof add src/      # Add newline if missing
+erlalign --eol-at-eof remove src/   # Remove trailing newline
+
+# Convert @doc to -doc attributes (OTP 27+)
+erlalign --doc src/
+
+# Keep separator lines in documentation
+erlalign --keep-separators src/
+
+# Suppress output
+erlalign --silent src/
+
+# Show help
+erlalign --help
+```
+
+#### Binary options
+
+| Flag | Default | Description |
+|---|---|---|
+| `--line-length N` | `98` | Maximum line length for alignment decisions |
+| `--trim-eol-ws` | on | Trim trailing whitespace from end of lines |
+| `--no-trim-eol-ws` | off | Keep trailing whitespace |
+| `--eol-at-eof VALUE` | off | Handle EOF newlines: `add`, `remove`, or `off` |
+| `--keep-separators` | off | Preserve `%%----` separator lines in docs |
+| `--doc` | off | Convert @doc to -doc attributes (OTP 27+) |
+| `--check` | off | Check mode - exit with error if unchanged needed |
+| `--dry-run` | off | Preview changes without writing files |
+| `-s, --silent` | off | Suppress output messages |
+| `-h, --help` | | Show help message |
+
+#### Global configuration
+
+The binary supports global configuration via `~/.config/erlalign/.formatter.exs`:
+
+```erlang
+[
+  {line_length, 120},
+  {trim_eol_ws, true},
+  {eol_at_eof, off}
+].
+```
+
+These default values can be overridden with command-line flags.
+
 ### Programmatic usage
 
 Use the modules directly from Erlang code:
