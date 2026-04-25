@@ -1,0 +1,9 @@
+-module(list_operations).
+
+head([H | T]) -> H;
+head([]) -> undefined.
+
+tail([_ | T]) -> T;
+tail([]) -> [].
+
+combine(List1, List2) -> List1 ++ List2.

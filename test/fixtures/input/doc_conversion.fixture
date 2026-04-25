@@ -1,0 +1,51 @@
+-module(doc_conversion).
+
+%%% @doc
+%%% Converts EDoc-formatted documentation to OTP-27 -doc attributes.
+%%%
+%%% This module demonstrates the conversion from the old @doc comment style
+%%% to the new -doc attribute syntax supported by Erlang/OTP 27+.
+%%%
+%%% @see fix-erlang-docs
+%%%
+
+-export([format/2]).
+
+%% @doc
+%% Formats the given Erlang source string with column alignment.
+%%
+%% Options may include:
+%%   - line_length: Maximum line length (default: 98)
+%%
+%% @see align_variables/1
+%% @see align_arrows/1
+format(Contents, Opts) ->
+  case proplists:get_value(line_length, Opts, 98) of
+    LineLength -> do_format(Contents, LineLength);
+    _          -> Contents
+  end.
+
+%% @doc
+%% Aligns consecutive variable assignments.
+%%
+%% Example:
+%% ```
+%% X = 1,
+%% Foo = <<"bar">>,
+%% SomethingLong = 42.
+%% '''
+%%
+%% Becomes:
+%% ```
+%% X             = 1,
+%% Foo           = <<"bar">>,
+%% SomethingLong = 42.
+%% '''
+align_variables(Lines) ->
+  group_by_indentation(Lines).
+
+-type doc_block() :: string().
+%% A documentation block containing formatted text.
+
+-type option() :: {key, term()}.
+%% An option tuple for configuration.

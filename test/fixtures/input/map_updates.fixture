@@ -1,0 +1,16 @@
+-module(map_updates).
+
+update_record(Map) ->
+  Map#{name => <<"Bob">>, age => 25, active => true}.
+
+large_map(Map) ->
+  Map#{
+    name => <<"Bob">>, % One
+    age => 25, % Two
+    active => true, % Three
+    passive => false,
+    nickname => <<"Bobby">> % Five
+  }.
+
+merge_maps(M1, M2) ->
+  M1#{x => 1, y => 2} = M2#{a => 10, b => 20}.

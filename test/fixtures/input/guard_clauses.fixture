@@ -1,0 +1,8 @@
+-module(guard_clauses).
+
+is_adult(Age) when Age >= 18 -> true;
+is_adult(Age) when Age < 18 -> false.
+
+check_type(X) when is_integer(X) -> int;
+check_type(X) when is_atom(X) -> atom;
+check_type(X) when is_binary(X) -> string.

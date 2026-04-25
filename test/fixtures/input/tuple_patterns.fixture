@@ -1,0 +1,9 @@
+-module(tuple_patterns).
+
+match_tuple({A, B}) -> A + B;
+match_tuple({X, Y, Z}) -> X * Y * Z;
+match_tuple({ok, Value, Status}) -> {Value, Status}.
+
+deconstruct() ->
+  {X, Y} = {1, 2},
+  {A, B, C} = {10, 20, 30}.

@@ -1,0 +1,18 @@
+-module(nested_structures).
+
+parse_nested() ->
+  Data = #{
+    user => #{
+      name => <<"Alice">>,
+      contact => #{
+        email => <<"alice@example.com">>,
+        phone => <<"555-1234">>
+      }
+    },
+    status => active
+  }.
+
+process({ok, {Type, Value, Status}}) ->
+  {Type, Value, Status};
+process({error, Reason}) ->
+  {error, Reason}.

@@ -1,0 +1,7 @@
+-module(variable_alignment).
+
+test() ->
+  X             = 1,
+  Foo           = <<"bar">>,
+  SomethingLong = 42,
+  ok.

@@ -1,0 +1,31 @@
+-module(case_patterns).
+
+classify(Value) ->
+  case Value of
+    {ok, X}          -> X;
+    {error, _} = Err -> Err;
+    _                -> unknown
+  end.
+
+single_line_clauses(Value) ->
+  case Value of
+    {ok, X}          -> X;      % Comment one
+    {error, _} = Err -> Err;    % Comment two
+    _                -> unknown % Comment three
+  end.
+
+multi_line_clauses(Event) ->
+  case Event of
+    % Comment one
+    {user, created, User} ->
+      send_welcome_email(User),
+      log_event(created);
+    % Comment two
+    {user, updated, User} ->
+      notify_watchers(User),
+      log_event(updated);
+    % Comment three
+    {user, deleted, User} ->
+      revoke_sessions(User),
+      archive_data(User)
+  end.

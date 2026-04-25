@@ -1,0 +1,32 @@
+# rebar3 artifacts
+_build/
+.rebar3/
+*.crashdump
+*.dump
+*.erl.bak
+
+# AppFile
+*.app
+
+# Build artifacts
+ebin/
+*.beam
+
+# Test artifacts
+.cover/
+.eunit/
+
+# IDE
+.vscode/
+.elixir_ls/
+.idea/
+
+# OS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Generated
+doc/
+dialyzer.plt

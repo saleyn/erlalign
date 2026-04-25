@@ -1,0 +1,10 @@
+{application, erlalign,
+ [{description, "Erlang code formatter with column alignment"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [kernel, stdlib]},
+  {env, []},
+  {modules, [erlalign, erlalign_docs, rebar3_erlalign_prv, rebar3_erlalign_docs_prv]},
+  {licenses, ["Apache-2.0"]},
+  {links, [{"GitHub", "https://github.com/josevalim/erlalign"}]}
+ ]}.

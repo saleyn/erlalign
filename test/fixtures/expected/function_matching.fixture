@@ -1,0 +1,12 @@
+-module(function_matching).
+
+% Function clauses with pattern matching
+test(one)                     -> one;
+test(hundred)                 -> hundred;
+test(twenty)                  -> twenty;  % special case
+test(X)                       -> X.
+
+% Another function with guards
+process(X) when is_integer(X) -> integer;
+process(X) when is_atom(X)    -> atom;  % named values
+process(_)                    -> other.

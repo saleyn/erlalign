@@ -1,0 +1,15 @@
+-module(type_specs).
+
+-export([add/2, multiply/2, process/1]).
+
+-type number_type() :: integer() | float().
+-type status() :: ok | error | pending.
+
+-spec add(number_type(), number_type())      -> number_type().
+add(X, Y)                                    -> X + Y.
+
+-spec multiply(number_type(), number_type()) -> number_type().
+multiply(X, Y)                               -> X * Y.
+
+-spec process(any())                         -> status().
+process(_)                                   -> ok.

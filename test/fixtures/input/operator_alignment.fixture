@@ -1,0 +1,9 @@
+-module(operator_alignment).
+
+calculate() ->
+  A = 10 + 5,
+  BB = 20 * 3,
+  CCC = 100 / 2,
+  DDDD = 7 mod 3,
+  XX = 1.5 + 2.5,
+  Y = 0.1 * 10.

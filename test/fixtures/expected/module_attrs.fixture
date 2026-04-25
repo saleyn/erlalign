@@ -1,0 +1,19 @@
+-module(module_attrs).
+
+-author(<<"Alice Developer">>).
+-vsn("1.0.0").
+-created({2024, 4, 15}).
+-last_modified({2024, 4, 24}).
+
+-export([main/0, helper/1]).
+-export_type([result/0]).
+
+-include("common.hrl").
+-include_lib("stdlib/include/assert.hrl").
+
+-define(TIMEOUT,     5000).
+-define(MAX_RETRIES, 3).
+-define(BUFFER_SIZE, 8192).
+
+main()    -> ok.
+helper(X) -> X.

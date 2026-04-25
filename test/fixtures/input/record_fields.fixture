@@ -1,0 +1,9 @@
+-module(record_fields).
+
+create_user() ->
+  #user{
+    name = <<"Alice">>,
+    age = 30,
+    email = <<"alice@example.com">>,
+    status = active
+  }.

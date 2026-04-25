@@ -1,0 +1,18 @@
+-module(comments_alignment).
+
+% Short comments
+tuple() ->
+  {
+    foo = 1, % first
+    bar = 2, % second  
+    longer_name = 3, % third with longer variable name
+  }.
+  
+user() ->
+  % Or in a record
+  User = #user{
+    name = <<"Alice">>, % the user name
+    age = 30, % their age
+    email = <<"alice@example.com">>, % contact info
+    active = true % whether they are active
+  }.

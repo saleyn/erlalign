@@ -1,0 +1,13 @@
+-module(comments_wrapping).
+
+% This comment is relatively short
+X = 1,
+
+% This is a much longer comment that explains in detail what the next line of code does and provides context about why it's important to set this variable to this particular value
+Y = 2,
+
+% Short
+Z = 3,
+
+% Another long comment that wraps across multiple visual lines because it contains a lot of text and important information about the implementation details of the code that follows
+W = 4.
