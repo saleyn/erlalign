@@ -18,12 +18,14 @@
   align_comments/1,
   load_global_config/0,
   main/1,
-  handle_eol_at_eof/2
+  handle_eol_at_eof/2,
+  trim_eol_whitespace/2,
+  set_default_trim_eol_ws/1
 ]).
 
 -define(GLOBAL_CONFIG_PATH, "~/.config/erlalign/.formatter.exs").
 -define(DEFAULT_LINE_LENGTH, 98).
--define(SUPPORTED_OPTS, [line_length, eol_at_eof, keep_separators]).
+-define(SUPPORTED_OPTS, [line_length, eol_at_eof, keep_separators, doc, remove_doc_separators, trim_eol_ws]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -45,6 +47,9 @@ main(Args) ->
 %%--------------------------------------------------------------------
 run(Args) ->
   case parse_args(Args) of
+    ok ->
+      % Help was printed, exit successfully
+      ok;
     {ok, Opts, Paths} ->
       case Paths of
         [] ->
@@ -69,6 +74,8 @@ run(Args) ->
 %%    With `nil', the end-of-file newline is left unchanged.
 %%  - `keep_separators' (boolean, default `false'):
 %%    When `true', preserves separator lines like `%%----'
+%%  - `trim_eol_ws' (boolean, default `true'):
+%%    When `true', trim trailing whitespace from end of lines
 %% @end
 %%--------------------------------------------------------------------
 format(Contents) ->
@@ -79,7 +86,9 @@ format(Contents, Opts) ->
   Aligned1 = align_variable_assignments(Contents),
   Aligned2 = align_case_arrows(Aligned1),
   Aligned3 = align_comments(Aligned2),
-  handle_eol_at_eof(Aligned3, MergedOpts).
+  TrimmedOpts = set_default_trim_eol_ws(MergedOpts),
+  Trimmed = trim_eol_whitespace(Aligned3, TrimmedOpts),
+  handle_eol_at_eof(Trimmed, TrimmedOpts).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -104,10 +113,27 @@ align_variable_assignments(Code) ->
 %%--------------------------------------------------------------------
 align_case_arrows(Code) ->
   Lines = binary:split(Code, <<"\n">>, [global]),
+  AllLines = Lines,  % Keep original for lookahead
   Groups = group_by_indentation(Lines),
   Aligned = lists:flatmap(fun(Group) ->
     case {has_arrows(Group), length(Group) >= 2} of
-      {true, true} -> align_group(Group, fun find_arrow_pos/1);
+      {true, true} -> 
+        %% Split group if it has multi-line clause boundaries and specs
+        SubGroups = split_on_multiline_clauses(Group, AllLines),
+        lists:flatmap(fun(SubGroup) ->
+          %% Don't align groups with only 2 lines if first is spec
+          case length(SubGroup) of
+            2 ->
+              Line1 = lists:nth(1, SubGroup),
+              Trim1 = string:trim(Line1),
+              case Trim1 of
+                <<"-spec", _/binary>> -> SubGroup;  % Don't align spec+impl pairs
+                _ -> align_group(SubGroup, fun find_arrow_pos/1)
+              end;
+            N when N >= 3 -> align_group(SubGroup, fun find_arrow_pos/1);
+            _ -> SubGroup
+          end
+        end, SubGroups);
       _ -> Group
     end
   end, Groups),
@@ -115,7 +141,52 @@ align_case_arrows(Code) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Align comments: Align % markers in records and maps
+%% Split a group on multi-line clause boundaries and spec declarations.
+%% A multi-line clause is identified by an arrow that ends the line (no content after ->)
+%% A spec declaration starts with -spec and should not be aligned with implementations
+%% @end
+%%--------------------------------------------------------------------
+split_on_multiline_clauses(Group, _AllLines) ->
+  {Result, SubGroup} = lists:foldl(fun(Line, {Acc, Current}) ->
+    TrimmedLine = string:trim(Line),
+    %% Check if this is a spec declaration
+    IsSpec = case TrimmedLine of
+      <<"-spec", _/binary>> -> true;
+      _ -> false
+    end,
+    %% Check if line has arrow and if it's incomplete (ends with ->)
+    HasArrow = binary:match(TrimmedLine, <<"->">>) =/= nomatch,
+    EndsWithArrow = case binary:match(TrimmedLine, <<"->">>, [])  of
+      {Pos, _} -> 
+        %% Check if everything after -> is just whitespace/comment
+        Rest = binary:part(TrimmedLine, Pos + 2, byte_size(TrimmedLine) - Pos - 2),
+        string:trim(Rest) =:= <<"">>;
+      nomatch -> false
+    end,
+    
+    case {IsSpec, HasArrow, EndsWithArrow} of
+      {true, _, _} ->
+        %% Spec line - always close current group and start new one
+        case Current of
+          [] -> {Acc, [Line]};
+          _ -> {Acc ++ [lists:reverse(Current)], [Line]}
+        end;
+      {false, true, true} ->
+        %% Multi-line clause - close current group and start new one
+        case Current of
+          [] -> {Acc, [Line]};
+          _ -> {Acc ++ [lists:reverse(Current)], [Line]}
+        end;
+      _ ->
+        %% Regular line - add to current group
+        {Acc, [Line | Current]}
+    end
+  end, {[], []}, Group),
+  
+  case SubGroup of
+    [] -> Result;
+    _ -> Result ++ [lists:reverse(SubGroup)]
+  end.
 %% @end
 %%--------------------------------------------------------------------
 align_comments(Code) ->
@@ -197,31 +268,51 @@ parse_args_impl(["--check" | Rest], Opts, Paths) ->
   parse_args_impl(Rest, Opts#{check => true}, Paths);
 parse_args_impl(["--dry-run" | Rest], Opts, Paths) ->
   parse_args_impl(Rest, Opts#{dry_run => true}, Paths);
+parse_args_impl(["--doc" | Rest], Opts, Paths) ->
+  parse_args_impl(Rest, Opts#{doc => true}, Paths);
+parse_args_impl(["--keep-separators" | Rest], Opts, Paths) ->
+  parse_args_impl(Rest, Opts#{keep_separators => true}, Paths);
 parse_args_impl(["--line-length", N | Rest], Opts, Paths) ->
   LineLength = list_to_integer(binary_to_list(N)),
   parse_args_impl(Rest, Opts#{line_length => LineLength}, Paths);
+parse_args_impl(["--eol-at-eof", Value | Rest], Opts, Paths) ->
+  EolMode = case binary:list_to_bin(Value) of
+    <<"add">> -> add;
+    <<"remove">> -> remove;
+    <<"off">> -> nil;
+    _ -> nil
+  end,
+  parse_args_impl(Rest, Opts#{eol_at_eof => EolMode}, Paths);
+parse_args_impl(["--trim-eol-ws" | Rest], Opts, Paths) ->
+  parse_args_impl(Rest, Opts#{trim_eol_ws => true}, Paths);
+parse_args_impl(["--no-trim-eol-ws" | Rest], Opts, Paths) ->
+  parse_args_impl(Rest, Opts#{trim_eol_ws => false}, Paths);
 parse_args_impl([Path | Rest], Opts, Paths) ->
   parse_args_impl(Rest, Opts, [binary:list_to_bin(Path) | Paths]).
 
 print_help() ->
   io:format(
-    "Usage: erlalign [options] <file~s~s~n~n"
+    "Usage: ~s [options] <file~s~s~n~n"
     "Options:~n"
     "  --line-length N       Maximum line length (default: 98)~n"
+    "  --eol-at-eof VALUE    End-of-file newline handling: add, remove, or off (default: off)~n"
+    "  --trim-eol-ws         Trim trailing whitespace from end of lines (default)~n"
+    "  --no-trim-eol-ws      Do not trim trailing whitespace from end of lines~n"
+    "  --keep-separators     Preserve separator lines (%%%%----) in documentation~n"
+    "  --doc                 Convert @doc to -doc attributes (OTP 27+)~n"
     "  --check               Check formatting without writing files~n"
     "  --dry-run             Print would-be changes without writing~n"
     "  -s, --silent          Suppress stdout output~n"
     "  -h, --help            Print this help~n~n"
     "Global configuration: ~s/.config/erlalign/.formatter.exs~n",
-    ["|", "dir> [<file|dir> ...]", "~"]
+    [filename:basename(escript:script_name()), "|", "dir> [<file|dir> ...]", "~"]
   ).
 
 format_opts(Opts, Paths) ->
-  FormatOpts = case proplists:get_value(line_length, Opts) of
-    undefined -> [];
-    N -> [{line_length, N}]
-  end,
+  %% Build FormatOpts list with all supported formatting options
+  FormatOpts = build_format_opts(Opts),
   Silent = proplists:get_value(silent, Opts, false),
+  UseDoc = proplists:get_value(doc, Opts, false),
   Mode = case {proplists:get_value(check, Opts, false),
         proplists:get_value(dry_run, Opts, false)} of
     {true, _} -> check;
@@ -231,11 +322,23 @@ format_opts(Opts, Paths) ->
 
   Files = lists:flatmap(fun collect_files/1, Paths),
 
-  case process_files(Files, FormatOpts, Mode, Silent) of
+  case process_files(Files, FormatOpts, Mode, Silent, UseDoc) of
     {ok, _} -> ok;
     {changed, _} -> {error, 1};
     {error, _} -> {error, 1}
   end.
+
+%% Build format options list from parsed command-line arguments
+build_format_opts(Opts) ->
+  lists:filtermap(fun({Key, Value}) ->
+    case Key of
+      line_length -> {true, {line_length, Value}};
+      eol_at_eof -> {true, {eol_at_eof, Value}};
+      keep_separators -> {true, {keep_separators, Value}};
+      trim_eol_ws -> {true, {trim_eol_ws, Value}};
+      _ -> false
+    end
+  end, Opts).
 
 collect_files(Path) ->
   case filelib:is_dir(Path) of
@@ -257,8 +360,11 @@ collect_files(Path) ->
   end.
 
 process_files(Files, FormatOpts, Mode, Silent) ->
+  process_files(Files, FormatOpts, Mode, Silent, false).
+
+process_files(Files, FormatOpts, Mode, Silent, UseDoc) ->
   lists:foldl(fun(File, {Status, Count}) ->
-    case process_file(File, FormatOpts, Mode, Silent) of
+    case process_file(File, FormatOpts, Mode, Silent, UseDoc) of
       ok -> {Status, Count};
       changed -> {changed, Count + 1};
       error -> {error, Count}
@@ -266,9 +372,15 @@ process_files(Files, FormatOpts, Mode, Silent) ->
   end, {ok, 0}, Files).
 
 process_file(Path, FormatOpts, Mode, Silent) ->
+  process_file(Path, FormatOpts, Mode, Silent, false).
+
+process_file(Path, FormatOpts, Mode, Silent, UseDoc) ->
   case file:read_file(Path) of
     {ok, Original} ->
-      Formatted = format(Original, FormatOpts),
+      Formatted = case UseDoc of
+        true  -> erlalign_docs:format_code(Original, FormatOpts);
+        false -> format(Original, FormatOpts)
+      end,
       case Formatted == Original of
         true -> ok;
         false ->
@@ -291,18 +403,46 @@ process_file(Path, FormatOpts, Mode, Silent) ->
       error
   end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Set default value for trim_eol_ws option if not already set.
+%% Default is true (trim trailing whitespace).
+%% @end
+%%--------------------------------------------------------------------
+set_default_trim_eol_ws(Opts) ->
+  case lists:keyfind(trim_eol_ws, 1, Opts) of
+    false -> [{trim_eol_ws, true} | Opts];
+    {trim_eol_ws, _} -> Opts
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Trim trailing whitespace from all lines if trim_eol_ws option is true.
+%% @end
+%%--------------------------------------------------------------------
+trim_eol_whitespace(Code, Opts) ->
+  case proplists:get_value(trim_eol_ws, Opts, true) of
+    true ->
+      Lines = binary:split(Code, <<"\n">>, [global]),
+      TrimmedLines = [string:trim(Line, trailing) || Line <- Lines],
+      binary:list_to_bin(lists:join(<<"\n">>, TrimmedLines));
+    false ->
+      Code
+  end.
+
 validate_options(Opts) ->
   validate_options(Opts, ".formatter.exs").
 
 validate_options(Opts, Source) ->
   {Valid, Invalid} = proplists:split(Opts, ?SUPPORTED_OPTS),
+  FlatValid = lists:append(Valid),
   case Invalid of
-    [] -> Valid;
+    [] -> FlatValid;
     _ ->
       InvalidKeys = [atom_to_list(K) || {K, _} <- Invalid],
       io:format(standard_error, "erlalign: ~s contains unsupported option(s) ~w~n",
         [Source, InvalidKeys]),
-      Valid
+      FlatValid
   end.
 
 group_by_indentation(Lines) ->
@@ -326,16 +466,28 @@ group_by_indentation(Lines) ->
 
 has_assignments(Group) ->
   lists:any(fun(Line) ->
-    case re:run(Line, <<"\\s*\\w+\\s*=\\s*">>) of
-      {match, _} -> true;
+    case binary:match(Line, <<"=">>) of
+      {_, _} -> true;
       nomatch -> false
     end
   end, Group).
 
 has_arrows(Group) ->
-  lists:any(fun(Line) ->
+  HasArrowLine = lists:any(fun(Line) ->
     binary:match(Line, <<"->">>) =/= nomatch
-  end, Group).
+  end, Group),
+  
+  HasSpecLine = lists:any(fun(Line) ->
+    Trimmed = string:trim(Line),
+    case Trimmed of
+      <<"-spec", _/binary>> -> true;
+      _ -> false
+    end
+  end, Group),
+  
+  %% Only return true if we have arrows but NOT specs
+  %% (specs with their implementations should not be aligned together)
+  HasArrowLine andalso not HasSpecLine.
 
 find_eq_pos(Line) ->
   case binary:match(Line, <<"=">>) of

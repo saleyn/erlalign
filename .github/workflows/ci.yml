@@ -54,6 +54,9 @@ jobs:
         run: rebar3 covertool generate
         continue-on-error: true
 
+      - name: Generate erlalign escript
+        run: make escriptize
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

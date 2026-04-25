@@ -11,9 +11,9 @@
 -include("common.hrl").
 -include_lib("stdlib/include/assert.hrl").
 
--define(TIMEOUT,     5000).
+-define(TIMEOUT, 5000).
 -define(MAX_RETRIES, 3).
 -define(BUFFER_SIZE, 8192).
 
-main() -> ok.
+main()    -> ok.
 helper(X) -> X.

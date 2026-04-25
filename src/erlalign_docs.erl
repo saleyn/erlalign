@@ -246,22 +246,27 @@ format_code(Content, Opts) ->
 %% Internal function to actually format code (assumes OTP >= 27).
 %%--------------------------------------------------------------------
 format_code_internal(Content, Opts) ->
-  _LineLength = proplists:get_value(line_length, Opts, ?DEFAULT_LINE_LENGTH),
+  %% Apply column alignment formatting from erlalign
+  %% In future, full @doc to -doc conversion will be added here
+  Formatted = erlalign:format(Content, Opts),
+  
+  %% Remove separator lines unless explicitly kept
   KeepSeparators = proplists:get_value(keep_separators, Opts, false),
-
-  Lines = binary:split(Content, <<"\n">>, [global]),
-
-  % Process lines looking for @doc blocks (currently just passes through)
-  ProcessedLines = Lines,
-
-  % Second pass: remove any remaining separator lines adjacent to -doc
-  FinalLines = case KeepSeparators of
-    false -> remove_doc_separators(ProcessedLines);
-    true -> ProcessedLines
-  end,
-
-  Result = binary:list_to_bin(lists:join(<<"\n">>, FinalLines)),
-  erlalign:handle_eol_at_eof(Result, Opts).
+  case KeepSeparators of
+    true ->
+      Formatted;
+    false ->
+      %% Split into lines, remove separators, rejoin
+      Lines = binary:split(Formatted, <<"\n">>, [global]),
+      FilteredLines = lists:filtermap(fun(Line) ->
+        Trimmed = trim_binary(Line),
+        case binary:match(Trimmed, <<"%%----">>) of
+          nomatch -> {true, Line};
+          _ -> false
+        end
+      end, Lines),
+      iolist_to_binary(lists:join(<<"\n">>, FilteredLines))
+  end.
 
 %%--------------------------------------------------------------------
 %% @doc

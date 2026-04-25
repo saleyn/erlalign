@@ -10,7 +10,7 @@ classify(Value) ->
 single_line_clauses(Value) ->
   case Value of
     {ok, X} ->
-      X;   % Comment one
+      X; % Comment one
     {error, _} = Err ->
       Err; % Comment two
     _ ->

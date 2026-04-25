@@ -46,8 +46,12 @@ jobs:
       - name: Run tests
         run: rebar3 eunit
 
+      - name: Generate erlalign escript
+        run: make escriptize
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: "ErlAlign v${{ github.ref_name }}"
           generate_release_notes: true
+          files: _build/default/bin/erlalign

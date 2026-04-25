@@ -1,16 +1,30 @@
-.PHONY: help compile test cover clean publish bump-version retire-version
+.PHONY: help compile test cover clean publish bump-version retire-version escript escriptize install regenerate
 
 all: compile
 
 compile: remove-crushdump
 	rebar3 compile
 
+escriptize: compile
+	@echo "Building erlalign binary using rebar3..."
+	@rebar3 escriptize
+	@echo "✓ Binary created at _build/default/bin/erlalign"
+
+install: escript
+	@echo "Installing erlalign to /usr/local/bin/..."
+	@sudo cp _build/prod/bin/erlalign /usr/local/bin/erlalign
+	@sudo chmod +x /usr/local/bin/erlalign
+	@echo "✓ erlalign installed at /usr/local/bin/erlalign"
+
 help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Targets:"
 	@echo "  compile              Compile the project"
+	@echo "  escriptize           Build erlalign binary using rebar3"
+	@echo "  install              Install erlalign to /usr/local/bin"
 	@echo "  test                 Run the test suite"
+	@echo "  regenerate           Regenerate expected fixtures from input fixtures"
 	@echo "  cover                Run tests with coverage report"
 	@echo "  clean                Remove build artefacts and dependencies"
 	@echo "  doc                  Generate documentation"
@@ -22,6 +36,11 @@ help:
 test:
 	rebar3 eunit
 
+regenerate: compile
+	@echo "Regenerating fixtures from input..."
+	@erlc -pz _build/default/lib/erlalign/ebin -o _build/default/lib/erlalign/ebin priv/regen_fixtures.erl && \
+	 erl -pz _build/default/lib/erlalign/ebin -noshell -run regen_fixtures main -s erlang halt
+
 cover:
 	rebar3 eunit --cover
 	rebar3 covertool generate
@@ -30,7 +49,7 @@ cover:
 clean:
 	@rebar3 clean
 	@rm -rf _build .cover
-	@rm -f erl_crash.dump *.beam
+	@rm -f erl_crash.dump rebar3.crashdump *.beam
 
 doc docs:
 	@echo "ErlAlign documentation is generated via EDoc. No doc generation target yet."
@@ -67,3 +86,7 @@ retire-version:
 	fi
 	@echo "Retiring version $(version) of erlalign on Hex..."; \
 	rebar3 hex.retire erlalign $(version) deprecated --message "Deprecated"
+
+remove-crushdump:
+	@rm -f erl_crash.dump
+

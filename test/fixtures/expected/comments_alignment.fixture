@@ -4,10 +4,10 @@
 tuple() ->
   {
     foo         = 1, % first
-    bar         = 2, % second  
+    bar         = 2, % second
     longer_name = 3, % third with longer variable name
   }.
-  
+
 user() ->
   % Or in a record
   User = #user{
