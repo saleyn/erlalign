@@ -6,6 +6,6 @@ call_api() ->
   api:request(memory, <<"DELETE">>, Url3, []).
 
 call_another_api() ->
-  mod1:request(http, <<"GET">>, Url1, [{timeout, 5000}]),
-  module2:request(socket, <<"POST">>, Url2, [{body, Data}]),
-  other:request(memory, <<"DELETE">>, Url3, []).
+  mod1:request(http,      <<"GET">>,    Url1, [{timeout, 5000}]),
+  module2:request(socket, <<"POST">>,   Url2, [{body, Data}]),
+  other:request(memory,   <<"DELETE">>, Url3, []).

@@ -15,5 +15,5 @@
 -define(MAX_RETRIES, 3).
 -define(BUFFER_SIZE, 8192).
 
-main()    -> ok.
+main() -> ok.
 helper(X) -> X.

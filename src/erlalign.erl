@@ -15,6 +15,7 @@
   format/1,
   align_variable_assignments/1,
   align_case_arrows/1,
+  align_comments/1,
   load_global_config/0,
   main/1,
   handle_eol_at_eof/2
@@ -77,7 +78,8 @@ format(Contents, Opts) ->
   MergedOpts = lists:append(load_global_config(), validate_options(Opts)),
   Aligned1 = align_variable_assignments(Contents),
   Aligned2 = align_case_arrows(Aligned1),
-  handle_eol_at_eof(Aligned2, MergedOpts).
+  Aligned3 = align_comments(Aligned2),
+  handle_eol_at_eof(Aligned3, MergedOpts).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -106,6 +108,22 @@ align_case_arrows(Code) ->
   Aligned = lists:flatmap(fun(Group) ->
     case {has_arrows(Group), length(Group) >= 2} of
       {true, true} -> align_group(Group, fun find_arrow_pos/1);
+      _ -> Group
+    end
+  end, Groups),
+  binary:list_to_bin(lists:join(<<"\n">>, Aligned)).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Align comments: Align % markers in records and maps
+%% @end
+%%--------------------------------------------------------------------
+align_comments(Code) ->
+  Lines = binary:split(Code, <<"\n">>, [global]),
+  Groups = group_by_indentation(Lines),
+  Aligned = lists:flatmap(fun(Group) ->
+    case {has_comments(Group), length(Group) >= 2} of
+      {true, true} -> align_comment_group(Group);
       _ -> Group
     end
   end, Groups),
@@ -363,6 +381,63 @@ indentation(Line) ->
         _ -> 0
       end;
     nomatch -> 0
+  end.
+
+has_comments(Group) ->
+  %% Only align comments in structured contexts (maps, records, tuples)
+  %% Check if the GROUP (not individual lines) is within a structure
+  GroupStr = binary:list_to_bin(lists:join(<<"\n">>, Group)),
+  HasStructure = binary:match(GroupStr, <<"=>">>) =/= nomatch orelse
+                 binary:match(GroupStr, <<"#">>) =/= nomatch orelse
+                 binary:match(GroupStr, <<"{">>) =/= nomatch orelse
+                 binary:match(GroupStr, <<"}">>) =/= nomatch orelse
+                 binary:match(GroupStr, <<"[">>) =/= nomatch orelse
+                 binary:match(GroupStr, <<"]">>) =/= nomatch,
+  
+  %% Additionally check each line for structure indicators
+  HasCommentsInStructure = lists:any(fun(Line) ->
+    case binary:match(Line, <<"%">>) of
+      nomatch -> false;
+      {_,_} ->
+        %% Has comment AND line contains comma (typical in records/tuples/maps)
+        binary:match(Line, <<",">>) =/= nomatch
+    end
+  end, Group),
+  
+  %% Align comments only if group is in a structure OR lines have commas
+  (HasStructure orelse HasCommentsInStructure) andalso
+  lists:any(fun(Line) -> binary:match(Line, <<"%">>) =/= nomatch end, Group).
+
+find_comment_pos(Line) ->
+  case binary:match(Line, <<"%">>) of
+    {Pos, _} -> 
+      %% Only align if there's code before the comment (not a standalone comment)
+      BeforeComment = binary:part(Line, 0, Pos),
+      case string:trim(BeforeComment) of
+        <<>> -> -1;  %% Standalone comment, skip alignment
+        _ -> Pos      %% Real code with comment, include in alignment
+      end;
+    nomatch -> -1
+  end.
+
+align_comment_group(Lines) ->
+  %% Find max position before comment marker (only for lines with code+comment)
+  Positions = lists:map(fun find_comment_pos/1, Lines),
+  ValidPositions = lists:filter(fun(P) -> P >= 0 end, Positions),
+  
+  case ValidPositions of
+    [] -> Lines;
+    _ ->
+      MaxPos = lists:max(ValidPositions),
+      lists:map(fun({Line, Pos}) ->
+        case Pos >= 0 andalso Pos < MaxPos of
+          true ->
+            Pad = binary:copy(<<" ">>, MaxPos - Pos),
+            inject_padding(Line, Pos, Pad);
+          false ->
+            Line
+        end
+      end, lists:zip(Lines, Positions))
   end.
 
 handle_eol_at_eof(Result, Opts) ->

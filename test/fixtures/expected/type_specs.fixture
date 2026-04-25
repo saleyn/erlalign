@@ -5,11 +5,11 @@
 -type number_type() :: integer() | float().
 -type status() :: ok | error | pending.
 
--spec add(number_type(), number_type())      -> number_type().
-add(X, Y)                                    -> X + Y.
+-spec add(number_type(), number_type()) -> number_type().
+add(X, Y) -> X + Y.
 
 -spec multiply(number_type(), number_type()) -> number_type().
-multiply(X, Y)                               -> X * Y.
+multiply(X, Y) -> X * Y.
 
--spec process(any())                         -> status().
-process(_)                                   -> ok.
+-spec process(any()) -> status().
+process(_) -> ok.

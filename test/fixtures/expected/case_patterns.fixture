@@ -9,9 +9,13 @@ classify(Value) ->
 
 single_line_clauses(Value) ->
   case Value of
-    {ok, X}          -> X;      % Comment one
-    {error, _} = Err -> Err;    % Comment two
-    _                -> unknown % Comment three
+    {ok, X} ->
+      X;   % Comment one
+    {error, _} = Err ->
+      Err; % Comment two
+    _ ->
+      % Comment three
+      unknown
   end.
 
 multi_line_clauses(Event) ->

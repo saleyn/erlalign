@@ -22,9 +22,6 @@ help:
 test:
 	rebar3 eunit
 
-remove-crushdump:
-	@rm -f erl_crash.dump
-
 cover:
 	rebar3 eunit --cover
 	rebar3 covertool generate
@@ -43,14 +40,15 @@ publish:
 	rebar3 hex.publish$(if $(replace), --replace)
 
 bump-version:
-	@CURRENT=$$(grep -m1 'release, {erlalign,' rebar.config | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/'); \
+	@FILE=$$(ls -1 src/*.app.src | head -n1); \
+	CURRENT=$$(grep -m1 '{vsn,' $$FILE | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/'); \
 	MAJOR=$$(echo $$CURRENT | cut -d. -f1); \
 	MINOR=$$(echo $$CURRENT | cut -d. -f2); \
 	PATCH=$$(echo $$CURRENT | cut -d. -f3); \
 	NEW=$$(echo "$${MAJOR}.$${MINOR}.$$((PATCH + 1))" | tr -d '\n'); \
 	echo "Bumping version from $${CURRENT} to $${NEW}"; \
-	sed -i "s/{erlalign, \"$${CURRENT}\"}/{erlalign, \"$${NEW}\"}/" rebar.config; \
-	echo "Changed: {erlalign, \"$${CURRENT}\"} -> {erlalign, \"$${NEW}\"}"; \
+	sed -i "s/{vsn, \"$${CURRENT}\"}/{vsn, \"$${NEW}\"}/" $$FILE; \
+	echo "Changed: {vsn, \"$${CURRENT}\"} -> {vsn, \"$${NEW}\"}"; \
 	echo ""; \
 	read -p "Commit this change? [Y/n] " -n 1 -r || true; \
 	echo ""; \
