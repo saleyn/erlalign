@@ -5,7 +5,7 @@
 %%% Converts EDoc @doc blocks to OTP-27 -doc attributes in Erlang source files.
 %%%
 %%% Usage:
-%%%   rebar3 erlalign_docs [options] [files]
+%%%   rebar3 edoc-to-doc [options] [files]
 %%%
 %%% Options:
 %%%   --line-length N         Line wrap width (default: 80)
@@ -16,10 +16,10 @@
 %%%   -h, --help              Show help message
 %%%
 %%% Examples:
-%%%   rebar3 erlalign_docs                      # Convert all Erlang files
-%%%   rebar3 erlalign_docs --line-length 100    # Custom line length
-%%%   rebar3 erlalign_docs --keep-separators    # Keep separator lines
-%%%   rebar3 erlalign_docs --dry-run src/
+%%%   rebar3 edoc-to-doc                      # Convert all Erlang files
+%%%   rebar3 edoc-to-doc --line-length 100    # Custom line length
+%%%   rebar3 edoc-to-doc --keep-separators    # Keep separator lines
+%%%   rebar3 edoc-to-doc --dry-run src/
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
@@ -30,7 +30,7 @@
 
 -export([init/1, do/1, format_error/1, provider/0]).
 
--define(PROVIDER, erlalign_docs).
+-define(PROVIDER, 'edoc-to-doc').
 -define(DEPS, [compile]).
 
 %%%===================================================================
@@ -39,7 +39,7 @@
 
 -spec provider() -> {atom(), list()}.
 provider() ->
-  {erlalign_docs, [default, undefined]}.
+  {'edoc-to-doc', [default, undefined]}.
 
 -spec init(rebar_state:t()) -> {ok, rebar_state:t()}.
 init(State) ->

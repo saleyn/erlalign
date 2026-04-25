@@ -26,7 +26,7 @@ format_provider_info_test_() ->
       {"format provider returns valid spec",
         fun() ->
           Result = rebar3_erlalign_prv:provider(),
-          ?assertMatch({erlalign, _Spec}, Result)
+          ?assertMatch({format, _Spec}, Result)
         end
       },
       {"format provider spec contains required fields",
@@ -45,7 +45,7 @@ docs_provider_info_test_() ->
       {"docs provider returns valid spec",
         fun() ->
           Result = rebar3_erlalign_docs_prv:provider(),
-          ?assertMatch({erlalign_docs, _Spec}, Result)
+          ?assertMatch({'edoc-to-doc', _Spec}, Result)
         end
       },
       {"docs provider spec contains required fields",

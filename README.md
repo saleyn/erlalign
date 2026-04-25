@@ -92,7 +92,9 @@ user(UserID) -> ...
 
 ### As a rebar3 plugin
 
-Add to your `rebar.config`:
+Add erlalign to your project's `rebar.config` to use it as a rebar3 plugin:
+
+#### From GitHub (recommended for latest)
 
 ```erlang
 {plugins, [
@@ -100,25 +102,193 @@ Add to your `rebar.config`:
 ]}.
 ```
 
+#### From Hex.pm (when available)
+
+```erlang
+{plugins, [
+  {erlalign, "0.1.0"}
+]}.
+```
+
+### Using with rebar3
+
+After adding erlalign as a plugin, you can use it in your project:
+
+#### Format your project
+
+```bash
+# Format all Erlang files in src/
+rebar3 format
+
+# Format specific directory
+rebar3 format src/
+
+# Format specific file or files
+rebar3 format src/mymodule.erl src/another.erl
+
+# Format apps and lib directories
+rebar3 format apps/ lib/
+```
+
+#### Check formatting without modifying files
+
+```bash
+# Check if files need formatting
+rebar3 format --check src/
+
+# Useful in CI/CD to fail if files aren't formatted
+rebar3 format --check
+```
+
+#### Preview changes
+
+```bash
+# See what would change without writing files
+rebar3 format --dry-run src/
+
+# Also good for code review
+rebar3 format --dry-run apps/myapp/src/
+```
+
+#### Advanced options
+
+```bash
+# Custom line length
+rebar3 format --line-length 120 src/
+
+# Suppress output
+rebar3 format --silent src/
+
+# Combine options
+rebar3 format --line-length 100 --check src/
+```
+
+#### Converting documentation
+
+erlalign also includes a documentation converter for converting EDoc `@doc` blocks to OTP-27 `-doc` attributes:
+
+```bash
+# Convert documentation in all files
+rebar3 edoc-to-doc
+
+# Check documentation conversion without modifying
+rebar3 edoc-to-doc --check
+
+# Preview documentation changes
+rebar3 edoc-to-doc --dry-run
+
+# Keep separator lines
+rebar3 edoc-to-doc --keep-separators
+
+# Custom line length for wrapped docs
+rebar3 edoc-to-doc --line-length 100
+```
+
+### Integration tips
+
+#### Git hooks (pre-commit)
+
+Add to your `.git/hooks/pre-commit`:
+
+```bash
+#!/bin/bash
+set -e
+
+# Check formatting before commit
+rebar3 format --check
+```
+
+Make it executable:
+```bash
+chmod +x .git/hooks/pre-commit
+```
+
+#### GitHub Actions CI
+
+Add to your `.github/workflows/ci.yml`:
+
+```yaml
+- name: Check formatting
+  run: rebar3 format --check
+```
+
+#### Gitlab CI
+
+Add to your `.gitlab-ci.yml`:
+
+```yaml
+format_check:
+  script:
+    - rebar3 format --check
+```
+
+#### Combine with erlfmt
+
+For maximum code cleanliness, combine erlalign with erlfmt:
+
+```bash
+# First format with erlfmt (basic formatting)
+rebar3 fmt
+
+# Then align with erlalign (column alignment)
+rebar3 format
+```
+
+#### Creating a Makefile target
+
+Add to your `Makefile`:
+
+```makefile
+.PHONY: format fmt check-fmt
+
+fmt: format
+
+format:
+	rebar3 format
+
+check-fmt:
+	rebar3 format --check
+```
+
+Then use:
+```bash
+make format          # Format code
+make check-fmt       # Check formatting
+```
+
+#### Configuration per project
+
+Create a global config file at `~/.config/erlalign/.formatter.exs`:
+
+```erlang
+[
+  {line_length, 100},
+  {trim_eol_ws, true},
+  {eol_at_eof, off}
+].
+```
+
+This configuration will be used automatically by all projects using erlalign as a plugin or binary.
+
 ## Usage
 
 ### Formatting with rebar3
 
 ```bash
 # Format all Erlang files in src/
-rebar3 erlalign
+rebar3 format
 
 # Format specific directory
-rebar3 erlalign src/
+rebar3 format src/
 
 # Use custom line length
-rebar3 erlalign --line-length 120
+rebar3 format --line-length 120
 
 # Check mode (fail if formatting needed)
-rebar3 erlalign --check src/
+rebar3 format --check src/
 
 # Dry run (preview changes)
-rebar3 erlalign --dry-run src/mymodule.erl
+rebar3 format --dry-run src/mymodule.erl
 ```
 
 #### Options
@@ -135,19 +305,19 @@ rebar3 erlalign --dry-run src/mymodule.erl
 
 ```bash
 # Convert all EDoc @doc blocks to -doc attributes
-rebar3 erlalign_docs
+rebar3 edoc-to-doc
 
 # Custom line length for wrapped docs
-rebar3 erlalign_docs --line-length 100
+rebar3 edoc-to-doc --line-length 100
 
 # Keep separator lines (don't remove %%----)
-rebar3 erlalign_docs --keep-separators
+rebar3 edoc-to-doc --keep-separators
 
 # Check mode
-rebar3 erlalign_docs --check src/
+rebar3 edoc-to-doc --check src/
 
 # Dry run
-rebar3 erlalign_docs --dry-run src/
+rebar3 edoc-to-doc --dry-run src/
 ```
 
 #### Options

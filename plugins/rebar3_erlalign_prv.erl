@@ -2,11 +2,11 @@
 %%% @doc
 %%% rebar3 provider for ErlAlign column-aligning formatter.
 %%%
-%%% Provides the 'erlalign' rebar3 command to format Erlang source code
+%%% Provides the 'format' rebar3 command to format Erlang source code
 %%% with column alignment on top of erlfmt output.
 %%%
 %%% Usage:
-%%%   rebar3 erlalign [options] [files]
+%%%   rebar3 format [options] [files]
 %%%
 %%% Options:
 %%%   --line-length N         Maximum line length (default: 98)
@@ -16,10 +16,10 @@
 %%%   -h, --help              Show help message
 %%%
 %%% Examples:
-%%%   rebar3 erlalign                           # Format all Erlang files
-%%%   rebar3 erlalign --line-length 120         # Format with longer lines
-%%%   rebar3 erlalign --check src/              # Check src/ directory
-%%%   rebar3 erlalign --dry-run src/mymodule.erl
+%%%   rebar3 format                           # Format all Erlang files
+%%%   rebar3 format --line-length 120         # Format with longer lines
+%%%   rebar3 format --check src/              # Check src/ directory
+%%%   rebar3 format --dry-run src/mymodule.erl
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
@@ -30,7 +30,7 @@
 
 -export([init/1, do/1, format_error/1, provider/0]).
 
--define(PROVIDER, erlalign).
+-define(PROVIDER, format).
 -define(DEPS, [compile]).
 
 %%%===================================================================
@@ -39,7 +39,7 @@
 
 -spec provider() -> {atom(), list()}.
 provider() ->
-  {erlalign, [default, undefined]}.
+  {format, [default, undefined]}.
 
 -spec init(rebar_state:t()) -> {ok, rebar_state:t()}.
 init(State) ->
