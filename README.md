@@ -28,8 +28,8 @@ User = #user{
 
 % after (with ErlAlign)
 User = #user{
-  name.      = <<"Alice">>,
-  age.       =  30,
+  name = <<"Alice">>,
+  age =  30,
   occupation = <<"developer">>
 }.
 ```
@@ -43,8 +43,8 @@ Foo = <<"bar">>,
 SomethingLong = 42.
 
 % after
-X             = 1,
-Foo           = <<"bar">>,
+X              = 1,
+Foo            = <<"bar">>,
 SomethingLong = 42.
 ```
 
@@ -80,33 +80,31 @@ user(UserID) -> ...
 Returns the user record with the given ID.
 """.
 -spec user(id()) -> {ok, user()} | {error, atom()}.
-user(UserID)     -> ...
+user(UserID) -> ...
 ```
 
 ## Installation
 
 ### Requirements
 
-- Erlang/OTP 27 or later
+- Erlang/OTP 24 or later
 - rebar3 3.14+
 
 ### As a rebar3 plugin
 
 Add erlalign to your project's `rebar.config` to use it as a rebar3 plugin:
 
+#### From Hex.pm (when available)
+
+```erlang
+{plugins, [{erlalign, "0.1.0"}]}.
+```
+
 #### From GitHub (recommended for latest)
 
 ```erlang
 {plugins, [
   {erlalign, {git, "https://github.com/saleyn/erlalign.git", {branch, "main"}}}
-]}.
-```
-
-#### From Hex.pm (when available)
-
-```erlang
-{plugins, [
-  {erlalign, "0.1.0"}
 ]}.
 ```
 
@@ -117,7 +115,7 @@ After adding erlalign as a plugin, you can use it in your project:
 #### Format your project
 
 ```bash
-# Format all Erlang files in src/
+# Format all Erlang files in src/ and app/*/src/ (if found)
 rebar3 format
 
 # Format specific directory
@@ -264,7 +262,7 @@ Create a global config file at `~/.config/erlalign/.formatter.exs`:
 [
   {line_length, 100},
   {trim_eol_ws, true},
-  {eol_at_eof,  off}
+  {eol_at_eof, off}
 ].
 ```
 
@@ -481,13 +479,13 @@ Supported options:
 ## Building
 
 ```bash
-rebar3 compile
+make
 ```
 
 ## Testing
 
 ```bash
-rebar3 eunit
+make test
 ```
 
 ## License

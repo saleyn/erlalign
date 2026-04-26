@@ -15,6 +15,9 @@
 %%%   -s, --silent            Suppress output
 %%%   -h, --help              Show help message
 %%%
+%%% If no files or directories are specified, all .erl files in `src/` and
+%%% `app/*/src/` will be formatted.
+%%%  
 %%% Examples:
 %%%   rebar3 format                           # Format all Erlang files
 %%%   rebar3 format --line-length 120         # Format with longer lines
@@ -73,8 +76,10 @@ do(State) ->
   % Determine files to format
   Files = case Args of
     [] ->
-      % Format all Erlang files in src/
-      filelib:wildcard(filename:join([rebar_state:base_dir(State), "src", "**", "*.erl"]));
+      % Format all Erlang files in src/ and app/*/src/
+      filelib:wildcard(filename:join([rebar_state:base_dir(State), "src", "**", "*.erl"]))
+      ++
+      filelib:wildcard(filename:join([rebar_state:base_dir(State), "app", "*", "src", "**", "*.erl"]));
     _ ->
       % Format specified files/directories
       lists:flatmap(fun collect_files/1, Args)
