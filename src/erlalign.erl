@@ -1,11 +1,10 @@
-%%% @doc
-%%% Erlang code formatter that applies column alignment on top of erlfmt output.
-%%%
-%%% ErlAlign mirrors ExAlign's functionality for Erlang source code, enabling
-%%% readable column-aligned formatting similar to Go's gofmt.
-%%%
-%%% @end
 -module(erlalign).
+-moduledoc """
+Erlang code formatter that applies column alignment on top of erlfmt output
+
+ErlAlign mirrors ExAlign's functionality for Erlang source code, enabling
+readable column-aligned formatting similar to Go's gofmt
+""".
 
 -export([
   format/2,
@@ -24,20 +23,20 @@
 -define(DEFAULT_LINE_LENGTH, 98).
 -define(SUPPORTED_OPTS, [line_length, eol_at_eof, keep_separators, doc, remove_doc_separators, trim_eol_ws]).
 
-%% @doc
-%% Main CLI entry point. Parses arguments and runs the formatter.
-%% Calls erlang:halt/1 with appropriate exit code.
-%% @end
+-doc """
+Main CLI entry point. Parses arguments and runs the formatter
+Calls erlang:halt/1 with appropriate exit code
+""".
 main(Args) ->
   case run(Args) of
     ok            -> erlang:halt(0);
     {error, Code} -> erlang:halt(Code)
   end.
 
-%% @doc
-%% Parse arguments and run the formatter. Returns `ok' on success or
-%% `{error, exit_code}' on failure. Safe to call from tests.
-%% @end
+-doc """
+Parse arguments and run the formatter. Returns `ok` on success or
+`{error, exit_code}` on failure. Safe to call from tests
+""".
 run(Args) ->
   case parse_args(Args) of
     ok ->
@@ -55,19 +54,19 @@ run(Args) ->
       Error
   end.
 
-%% @doc
-%% Format Erlang source contents with column alignment.
-%% Opts may include:
-%%  - `line_length' (integer, default 98): Maximum line length for alignment
-%%  - `eol_at_eof' (`:add', `:remove', or `nil', default `nil'):
-%%    Controls end-of-file newline handling.
-%%    With `:add', a trailing newline is added if not present.
-%%    With `:remove', any trailing newline is removed.
-%%    With `nil', the end-of-file newline is left unchanged.
-%%  - `keep_separators' (boolean, default `false'):
-%%  - `trim_eol_ws' (boolean, default `true'):
-%%    When `true', trim trailing whitespace from end of lines
-%% @end
+-doc """
+Format Erlang source contents with column alignment
+Opts may include:
+- `line_length` (integer, default 98): Maximum line length for alignment
+- `eol_at_eof` (`:add`, `:remove`, or `nil`, default `nil`):
+Controls end-of-file newline handling
+With `:add`, a trailing newline is added if not present
+With `:remove`, any trailing newline is removed
+With `nil`, the end-of-file newline is left unchanged
+- `keep_separators` (boolean, default `false`):
+- `trim_eol_ws` (boolean, default `true`):
+When `true`, trim trailing whitespace from end of lines
+""".
 format(Contents) ->
   format(Contents, []).
 
@@ -80,9 +79,7 @@ format(Contents, Opts) ->
   Trimmed     = trim_eol_whitespace(Aligned3, TrimmedOpts),
   handle_eol_at_eof(Trimmed, TrimmedOpts).
 
-%% @doc
-%% Align consecutive variable assignments: Var = value
-%% @end
+-doc "Align consecutive variable assignments: Var = value".
 align_variable_assignments(Code) ->
   Lines   = binary:split(Code, <<"\n">>, [global]),
   Groups  = group_by_indentation(Lines),
@@ -94,9 +91,7 @@ align_variable_assignments(Code) ->
   end, Groups),
   binary:list_to_bin(lists:join(<<"\n">>, Aligned)).
 
-%% @doc
-%% Align case/if arrows: Pattern -> Body
-%% @end
+-doc "Align case/if arrows: Pattern -> Body".
 align_case_arrows(Code)          ->
   Lines    = binary:split(Code, <<"\n">>, [global]),
   AllLines = Lines,  % Keep original for lookahead
@@ -125,11 +120,13 @@ align_case_arrows(Code)          ->
   end, Groups),
   binary:list_to_bin(lists:join(<<"\n">>, Aligned)).
 
-%% @doc
-%% Split a group on multi-line clause boundaries and spec declarations.
-%% A multi-line clause is identified by an arrow that ends the line (no content after ->)
-%% A spec declaration starts with -spec and should not be aligned with implementations
-%% @end
+-doc """
+Split a group on multi-line clause boundaries and spec declarations
+A multi-line clause is identified by an arrow that ends the line (no content
+after ->)
+A spec declaration starts with -spec and should not be aligned with
+implementations
+""".
 split_on_multiline_clauses(Group, _AllLines) ->
   {Result, SubGroup, _} = lists:foldl(fun(Line, {Acc, Current, FuncCounts}) ->
     TrimmedLine = string:trim(Line),
@@ -139,8 +136,8 @@ split_on_multiline_clauses(Group, _AllLines) ->
       _                     -> false
     end,
     %% Check if line has arrow and if it's incomplete (ends with ->)
-    HasArrow      = binary:match(TrimmedLine, <<"->">>) =/= nomatch,
-    EndsWithArrow = case binary:match(TrimmedLine, <<"->">>, [])  of
+    HasArrow      = binary:match(TrimmedLine, <<"                ->">>) =/= nomatch,
+    EndsWithArrow = case binary:match(TrimmedLine, <<"           ->">>, [])  of
       {Pos, _} ->
         %% Check if everything after -> is just whitespace/comment
         Rest              = binary:part(TrimmedLine, Pos + 2, byte_size(TrimmedLine) - Pos - 2),
@@ -149,36 +146,36 @@ split_on_multiline_clauses(Group, _AllLines) ->
     end,
 
     %% Extract function name
-    CurrentFuncName = extract_function_name(TrimmedLine),
-    
+    CurrentFuncName              = extract_function_name(TrimmedLine),
+
     %% Get previous line info if available
     {PrevFuncName, PrevHasArrow} = case Current of
       [] -> {undefined, false};
-      [PrevLine | _] -> 
+      [PrevLine | _] ->
         {extract_function_name(string:trim(PrevLine)),
          binary:match(string:trim(PrevLine), <<"->">>) =/= nomatch}
     end,
-    
+
     %% Check if the PREVIOUS function appeared multiple times (multi-clause)
     PrevFuncCount = case PrevFuncName of
       undefined -> 0;
-      _ -> maps:get(PrevFuncName, FuncCounts, 0)
+      _         -> maps:get(PrevFuncName, FuncCounts, 0)
     end,
-    
+
     %% Only split on function name change if:
     %% 1. We have arrows on both lines
     %% 2. Previous line had a different function name
     %% 3. Previous function appeared MULTIPLE times (multi-clause function)
-    FunctionNameChanged = HasArrow andalso 
+    FunctionNameChanged = HasArrow andalso
                           PrevHasArrow andalso
-                          CurrentFuncName =/= undefined andalso 
-                          PrevFuncName =/= undefined andalso 
+                          CurrentFuncName =/= undefined andalso
+                          PrevFuncName    =/= undefined andalso
                           CurrentFuncName =/= PrevFuncName andalso
                           PrevFuncCount >= 2,  %% Only split if multi-clause
 
     %% Update function counts for current function
     NewFuncCounts = case {HasArrow, CurrentFuncName} of
-      {true, Name} when Name =/= undefined -> 
+      {true, Name} when Name =/= undefined ->
         maps:put(Name, maps:get(Name, FuncCounts, 0) + 1, FuncCounts);
       _ -> FuncCounts
     end,
@@ -213,17 +210,15 @@ split_on_multiline_clauses(Group, _AllLines) ->
     _  -> Result ++ [lists:reverse(SubGroup)]
   end.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Extract the function name from a clause line.
-%% Returns the function name atom or undefined if not a clause.
-%% @end
-%%--------------------------------------------------------------------
+-doc """
+Extract the function name from a clause line
+Returns the function name atom or undefined if not a clause
+""".
 extract_function_name(Line) ->
   %% Match pattern: func_name(...) or -module(...) or similar
   case re:run(Line, <<"^([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(">>, [{capture, [1], binary}]) of
     {match, [FuncName]} -> FuncName;
-    nomatch -> undefined
+    nomatch             -> undefined
   end.
 
 align_comments(Code) ->
@@ -237,9 +232,7 @@ align_comments(Code) ->
   end, Groups),
   binary:list_to_bin(lists:join(<<"\n">>, Aligned)).
 
-%% @doc
-%% Load global configuration from ~/.config/erlalign/.formatter.exs
-%% @end
+-doc "Load global configuration from ~/.config/erlalign/.formatter.exs".
 load_global_config() ->
   Path = expand_tilde(?GLOBAL_CONFIG_PATH),
   case file:read_file(Path) of
@@ -261,9 +254,7 @@ load_global_config() ->
       []
   end.
 
-%% @doc
-%% Expand tilde (~) in a file path to the user's home directory.
-%% @end
+-doc "Expand tilde (~) in a file path to the user's home directory".
 expand_tilde("~" ++ Rest) ->
   Home = case os:getenv("HOME") of
     false -> "/root";
@@ -314,6 +305,18 @@ parse_args_impl(["--eol-at-eof", Value | Rest], Opts, Paths) ->
     _            -> nil
   end,
   parse_args_impl(Rest, Opts#{eol_at_eof => EolMode}, Paths);
+parse_args_impl(["-o", OutputFile | Rest], Opts, Paths) ->
+  Output = case is_binary(OutputFile) of
+    true  -> OutputFile;
+    false -> binary:list_to_bin(OutputFile)
+  end,
+  parse_args_impl(Rest, Opts#{output => Output}, Paths);
+parse_args_impl(["--output", OutputFile | Rest], Opts, Paths) ->
+  Output = case is_binary(OutputFile) of
+    true  -> OutputFile;
+    false -> binary:list_to_bin(OutputFile)
+  end,
+  parse_args_impl(Rest, Opts#{output => Output}, Paths);
 parse_args_impl(["--trim-eol-ws" | Rest], Opts, Paths) ->
   parse_args_impl(Rest, Opts#{trim_eol_ws => true}, Paths);
 parse_args_impl(["--no-trim-eol-ws" | Rest], Opts, Paths) ->
@@ -330,6 +333,7 @@ print_help() ->
     "  --trim-eol-ws         Trim trailing whitespace from end of lines (default)~n"
     "  --no-trim-eol-ws      Do not trim trailing whitespace from end of lines~n"
     "  --doc                 Convert @doc to -doc attributes (OTP 27+)~n"
+    "  -o, --output FILE     Write output to FILE instead of source (single file only)~n"
     "  --check               Check formatting without writing files~n"
     "  --dry-run             Print would-be changes without writing~n"
     "  -s, --silent          Suppress stdout output~n"
@@ -343,6 +347,7 @@ format_opts(Opts, Paths) ->
   FormatOpts = build_format_opts(Opts),
   Silent     = proplists:get_value(silent, Opts, false),
   UseDoc     = proplists:get_value(doc, Opts, false),
+  OutputFile = proplists:get_value(output, Opts, undefined),
   Mode       = case {proplists:get_value(check, Opts, false),
         proplists:get_value(dry_run, Opts, false)} of
     {true, _} -> check;
@@ -352,10 +357,23 @@ format_opts(Opts, Paths) ->
 
   Files = lists:flatmap(fun collect_files/1, Paths),
 
-  case process_files(Files, FormatOpts, Mode, Silent, UseDoc) of
-    {ok, _}      -> ok;
-    {changed, _} -> {error, 1};
-    {error, _}   -> {error, 1}
+  %% Validate output option: only allowed with single file
+  case {OutputFile, length(Files)} of
+    {undefined, _} ->
+      case process_files(Files, FormatOpts, Mode, Silent, UseDoc, OutputFile) of
+        {ok, _}      -> ok;
+        {changed, _} -> {error, 1};
+        {error, _}   -> {error, 1}
+      end;
+    {_, 1} ->
+      case process_files(Files, FormatOpts, Mode, Silent, UseDoc, OutputFile) of
+        {ok, _}      -> ok;
+        {changed, _} -> {error, 1};
+        {error, _}   -> {error, 1}
+      end;
+    {_, _} ->
+      io:format(standard_error, "Error: --output/-o can only be used with a single file~n", []),
+      {error, 1}
   end.
 
 %% Build format options list from parsed command-line arguments
@@ -389,16 +407,16 @@ collect_files(Path) ->
       end
   end.
 
-process_files(Files, FormatOpts, Mode, Silent, UseDoc) ->
+process_files(Files, FormatOpts, Mode, Silent, UseDoc, OutputFile) ->
   lists:foldl(fun(File, {Status, Count}) ->
-    case process_file(File, FormatOpts, Mode, Silent, UseDoc) of
+    case process_file(File, FormatOpts, Mode, Silent, UseDoc, OutputFile) of
       ok      -> {Status, Count};
       changed -> {changed, Count + 1};
       error   -> {error, Count}
     end
   end, {ok, 0}, Files).
 
-process_file(Path, FormatOpts, Mode, Silent, UseDoc) ->
+process_file(Path, FormatOpts, Mode, Silent, UseDoc, OutputFile) ->
   case file:read_file(Path) of
     {ok, Original} ->
       Formatted = case UseDoc of
@@ -417,9 +435,18 @@ process_file(Path, FormatOpts, Mode, Silent, UseDoc) ->
               Silent orelse io:format("~s~n", [Formatted]),
               changed;
             write ->
-              file:write_file(Path, Formatted),
-              Silent orelse io:format("reformatted: ~s~n", [Path]),
-              ok
+              WritePath = case OutputFile of
+                undefined -> Path;
+                _         -> OutputFile
+              end,
+              case file:write_file(WritePath, Formatted) of
+                ok ->
+                  Silent orelse io:format("reformatted: ~s~n", [WritePath]),
+                  ok;
+                {error, WriteErr} ->
+                  io:format(standard_error, "Error writing to ~s: ~w~n", [WritePath, WriteErr]),
+                  error
+              end
           end
       end;
     {error, Reason} ->
@@ -427,19 +454,17 @@ process_file(Path, FormatOpts, Mode, Silent, UseDoc) ->
       error
   end.
 
-%% @doc
-%% Set default value for trim_eol_ws option if not already set.
-%% Default is true (trim trailing whitespace).
-%% @end
+-doc """
+Set default value for trim_eol_ws option if not already set
+Default is true (trim trailing whitespace)
+""".
 set_default_trim_eol_ws(Opts) ->
   case lists:keyfind(trim_eol_ws, 1, Opts) of
     false            -> [{trim_eol_ws, true} | Opts];
     {trim_eol_ws, _} -> Opts
   end.
 
-%% @doc
-%% Trim trailing whitespace from all lines if trim_eol_ws option is true.
-%% @end
+-doc "Trim trailing whitespace from all lines if trim_eol_ws option is true".
 trim_eol_whitespace(Code, Opts) ->
   case proplists:get_value(trim_eol_ws, Opts, true) of
     true ->

@@ -12,6 +12,7 @@
 %%%   --line-length N         Maximum line length (default: 98)
 %%%   --check                 Check formatting without modifying files
 %%%   --dry-run               Show what would be formatted
+%%%   -o, --output FILE       Write output to FILE instead of source (single file only)
 %%%   -s, --silent            Suppress output
 %%%   -h, --help              Show help message
 %%%
@@ -23,6 +24,7 @@
 %%%   rebar3 format --line-length 120         # Format with longer lines
 %%%   rebar3 format --check src/              # Check src/ directory
 %%%   rebar3 format --dry-run src/mymodule.erl
+%%%   rebar3 format -o /tmp/output.erl src/mymodule.erl  # Save to different file
 %%%
 %%% @end
 %%%-------------------------------------------------------------------

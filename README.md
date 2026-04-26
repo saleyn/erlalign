@@ -171,9 +171,14 @@ rebar3 format --line-length 120 src/
 # Suppress output
 rebar3 format --silent src/
 
+# Write to a different output file (single file only)
+rebar3 format --output /tmp/formatted.erl src/mymodule.erl
+
 # Combine options
 rebar3 format --line-length 100 --check src/
 ```
+
+**Note:** The `--output` or `-o` option can only be used when formatting a single file. Use it to save the formatted output to a different location while leaving the original file unchanged.
 
 #### Converting documentation
 

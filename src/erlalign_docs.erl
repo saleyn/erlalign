@@ -344,13 +344,32 @@ convert_doc_to_moduledoc(DocLine) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Check if a line is a comment line (starts with %).
+%% Check if a line actually starts a @doc tag (not just contains the text).
+%% Must be in format: %% @doc, %%% @doc, etc. followed by space or end of line.
 %%--------------------------------------------------------------------
-is_comment_line(Line) ->
-  StrippedLine = string:trim(Line, leading),
-  case byte_size(StrippedLine) of
-    0 -> false;
-    _ -> binary:at(StrippedLine, 0) == $%
+is_doc_tag_line(Line) ->
+  Trimmed = trim_binary(Line),
+  % Remove the leading comment markers
+  CommentStripped = case Trimmed of
+    <<"%%%", Rest/binary>> -> Rest;
+    <<"%%", Rest/binary>> -> Rest;
+    <<"%", Rest/binary>> -> Rest;
+    _ -> Trimmed
+  end,
+  % Strip leading spaces
+  CommentContent = trim_binary(CommentStripped),
+  % Check for @doc followed by space, word boundary, or end of string
+  case binary:match(CommentContent, <<"@doc">>) of
+    {0, 4} ->
+      % @doc is at position 0, check what comes after
+      case byte_size(CommentContent) of
+        4 -> true;  % Just "@doc" at end
+        _ ->
+          % Check next character is word boundary (space, newline, etc)
+          NextChar = binary:at(CommentContent, 4),
+          NextChar == $  orelse NextChar == $\n orelse NextChar == $\t
+      end;
+    _ -> false
   end.
 
 %%--------------------------------------------------------------------
@@ -361,10 +380,10 @@ process_doc_lines([], _Width, _KeepSeparators, Acc) ->
   Acc;
 process_doc_lines([Line | Rest], Width, KeepSeparators, Acc) ->
   Trimmed = trim_binary(Line),
-  % Check if this line has @doc AND is a comment line
-  case binary:match(Trimmed, <<"@doc">>) of
-    nomatch ->
-      % Not a @doc line, check if it's a separator
+  % Check if this line has @doc as an actual tag (not just text) AND is a comment line
+  case is_doc_tag_line(Line) of
+    false ->
+      % Not a @doc tag, check if it's a separator
       case is_separator_line(Trimmed) of
         true when not KeepSeparators ->
           % Skip separator unless keep_separators is true
@@ -373,35 +392,28 @@ process_doc_lines([Line | Rest], Width, KeepSeparators, Acc) ->
           % Keep the line
           process_doc_lines(Rest, Width, KeepSeparators, [Line | Acc])
       end;
-    _ ->
-      % Found @doc pattern, verify it's actually in a comment (Bug #4 fix)
-      case is_comment_line(Line) of
-        false ->
-          % @doc is in a string literal or other non-comment context, keep the line
-          process_doc_lines(Rest, Width, KeepSeparators, [Line | Acc]);
-        true ->
-          % Found @doc in a comment, extract the full block
-          {TextLines, SeeRefs, RemainingLines} = extract_doc_block([Line | Rest]),
-          % Convert to -doc attribute
-          DocAttr = convert_doc_block(TextLines, SeeRefs, [{line_length, Width}]),
-          % Add to accumulator
-          AccWithDoc = [DocAttr | Acc],
-          % Skip any separator after @end if not keeping separators, but don't add blank line
-          % unless the next non-separator line is not a function/clause start (Bug #2 fix)
-          {RemainingLines2, AddBlank} = case KeepSeparators of
-            true -> {RemainingLines, false};
-            false -> 
-              {Rest2, WasSeparator} = skip_separator_after_end_with_blank(RemainingLines),
-              % Only add blank if we removed a separator AND next line is not code
-              {Rest2, WasSeparator andalso should_add_blank_after_doc(Rest2)}
-          end,
-          % Add blank line if needed
-          AccWithDoc2 = case AddBlank of
-            true -> [<<>> | AccWithDoc];
-            false -> AccWithDoc
-          end,
-          process_doc_lines(RemainingLines2, Width, KeepSeparators, AccWithDoc2)
-      end
+    true ->
+      % Found @doc tag, extract the full block
+      {TextLines, SeeRefs, RemainingLines} = extract_doc_block([Line | Rest]),
+      % Convert to -doc attribute
+      DocAttr = convert_doc_block(TextLines, SeeRefs, [{line_length, Width}]),
+      % Add to accumulator
+      AccWithDoc = [DocAttr | Acc],
+      % Skip any separator after @end if not keeping separators, but don't add blank line
+      % unless the next non-separator line is not a function/clause start (Bug #2 fix)
+      {RemainingLines2, AddBlank} = case KeepSeparators of
+        true -> {RemainingLines, false};
+        false -> 
+          {Rest2, WasSeparator} = skip_separator_after_end_with_blank(RemainingLines),
+          % Only add blank if we removed a separator AND next line is not code
+          {Rest2, WasSeparator andalso should_add_blank_after_doc(Rest2)}
+      end,
+      % Add blank line if needed
+      AccWithDoc2 = case AddBlank of
+        true -> [<<>> | AccWithDoc];
+        false -> AccWithDoc
+      end,
+      process_doc_lines(RemainingLines2, Width, KeepSeparators, AccWithDoc2)
   end.
 
 %%--------------------------------------------------------------------
@@ -511,18 +523,6 @@ extract_see_ref(Line) ->
     nomatch ->
       ""
   end.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Skip a trailing separator line after @end.
-%%--------------------------------------------------------------------
-skip_separator_after_end([Line | Rest]) ->
-  case is_separator_line(trim_binary(Line)) of
-    true -> Rest;
-    false -> [Line | Rest]
-  end;
-skip_separator_after_end([]) ->
-  [].
 
 %%--------------------------------------------------------------------
 %% @doc

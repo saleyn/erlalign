@@ -1,0 +1,10 @@
+-module(t).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Internal function to actually format code (assumes OTP >= 27).
+%%--------------------------------------------------------------------
+format_code_internal(Content, Opts) ->
+  %% First, convert @doc blocks to -doc attributes
+  Converted = convert_doc_blocks(Content, Opts),
+  ok.
