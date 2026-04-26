@@ -92,7 +92,7 @@ align_variable_assignments(Code) ->
   binary:list_to_bin(lists:join(<<"\n">>, Aligned)).
 
 -doc "Align case/if arrows: Pattern -> Body".
-align_case_arrows(Code)          ->
+align_case_arrows(Code)             ->
   Lines    = binary:split(Code, <<"\n">>, [global]),
   AllLines = Lines,  % Keep original for lookahead
   Groups   = group_by_indentation(Lines),
@@ -123,7 +123,7 @@ align_case_arrows(Code)          ->
 -doc """
 Split a group on multi-line clause boundaries and spec declarations
 A multi-line clause is identified by an arrow that ends the line (no content
-after ->)
+after                                        ->)
 A spec declaration starts with -spec and should not be aligned with
 implementations
 """.
@@ -150,7 +150,7 @@ split_on_multiline_clauses(Group, _AllLines) ->
 
     %% Get previous line info if available
     {PrevFuncName, PrevHasArrow} = case Current of
-      [] -> {undefined, false};
+      []             -> {undefined, false};
       [PrevLine | _] ->
         {extract_function_name(string:trim(PrevLine)),
          binary:match(string:trim(PrevLine), <<"->">>) =/= nomatch}
@@ -540,7 +540,7 @@ find_eq_pos(Line) ->
 
 find_eq_pos_skip_operators(Line, StartPos) ->
   case binary:match(Line, <<"=">>, [{scope, {StartPos, byte_size(Line) - StartPos}}]) of
-    nomatch -> -1;
+    nomatch  -> -1;
     {Pos, _} ->
       % Check if the character before is >, /, or !
       case Pos > 0 of
