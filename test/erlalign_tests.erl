@@ -138,7 +138,7 @@ format_docs_tests() ->
         fun() ->
           Code = <<"%% @doc\n%% Test documentation.\n">>,
           Result = erlalign_docs:format_code(Code, []),
-          ?assertEqual(Code, Result)
+          ?assertEqual(<<"-doc \"Test documentation\".\n">>, Result)
         end
       },
       {"convert with line length wrapping",
@@ -159,8 +159,42 @@ format_docs_tests() ->
         fun() ->
           Code = <<"%%% @doc\n%%% Module documentation.\n%%% @end\n">>,
           Result = erlalign_docs:format_code(Code, []),
-          % Code is preserved as-is
-          ?assertEqual(Code, Result)
+          % Code should be converted to -doc attribute
+          ?assertEqual(<<"-doc \"Module documentation\".\n">>, Result)
+        end
+      },
+      {"convert another moduledoc",
+        fun() ->
+          Code = """
+            %%%-------------------------------------------------------------------
+            %%% @doc
+            %%% Tests for erlalign_docs module
+            %%%
+            %%% Tests the implemented functionality:
+            %%% - OTP version checking
+            %%%
+            %%% @end
+            %%%-------------------------------------------------------------------
+            -module(test).
+            """,
+          Expected = iolist_to_binary([
+            "-doc \"\"\"",
+            10,  % newline
+            "Tests for erlalign_docs module",
+            10,  % newline
+            10,  % newline
+            "Tests the implemented functionality:",
+            10,  % newline
+            "- OTP version checking",
+            10,  % newline
+            "\"\"\".",
+            10,  % newline
+            10,  % newline
+            "-module(test)."
+          ]),
+          Result = erlalign_docs:format_code(Code, []),
+          % Code should be converted to -doc attribute
+          ?assertEqual(Expected, Result)
         end
       },
       {"remove separator lines by default",
@@ -255,8 +289,8 @@ edge_case_tests() ->
         fun() ->
           Code = <<"%% @doc\n%% Test doc.\n%% @see other_function/1\n">>,
           Result = erlalign_docs:format_code(Code, []),
-          % Code is preserved as-is
-          ?assertEqual(Code, Result)
+          % Code should be converted to -doc with @see reference included
+          ?assertEqual(<<"-doc \"\"\"\nTest doc\nSee also:\n- `other_function/1`\n\"\"\".\n">>, Result)
         end
       },
       {"handle binary vs string inputs",

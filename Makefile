@@ -3,7 +3,7 @@ APP=$(shell sed -n '/application,/{s/^.*, //; s/,.*$$//; p; q}' src/*.app.src)
 
 all: compile
 
-compile: remove-crushdump
+compile:
 	rebar3 compile
 
 escriptize: compile

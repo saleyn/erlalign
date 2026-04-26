@@ -95,9 +95,9 @@ parse_doc_block(Lines, StartIdx, Prefix) ->
 %% Convert EDoc markup to Markdown.
 %%--------------------------------------------------------------------
 convert_to_markdown(TextLines) ->
-  Text = lists:join(<<"\\n">>, TextLines),
-  Text2 = re:replace(Text, "`([^'`\\n]+)'", "`\\1`", [global, {return, binary}]),
-  binary:split(Text2, <<"\\n">>, [global]).
+  Text = lists:join(<<"\n">>, TextLines),
+  Text2 = re:replace(Text, "`([^'`\n]+)'", "`\\1`", [global, {return, binary}]),
+  binary:split(Text2, <<"\n">>, [global]).
 
 %%--------------------------------------------------------------------
 %% @doc Format @see references as Markdown.
@@ -119,11 +119,11 @@ wrap_lines(Lines, Width) when is_integer(Width), Width > 0 ->
     Trimmed = trim_leading_binary(Line),
     case {string:prefix(Trimmed, <<"```">>), InFence} of
       {nomatch, false} ->
-        case re:match(Line, <<"^\\s*<\\w">>) of
+        case re:run(Line, <<"^\\s*<\\w">>) of
           {match, _} ->
             {[Line | Acc], InFence};
           nomatch ->
-            case re:match(Line, <<"^([-*]|\\d+\\.)\\s">>) of
+            case re:run(Line, <<"^([-*]|\\d+\\.)\\s">>) of
               {match, _} ->
                 Wrapped = wrap_paragraph(Line, Width),
                 {lists:reverse(Wrapped) ++ Acc, InFence};
@@ -188,16 +188,15 @@ format_doc_attribute(Lines, Kind) ->
     moduledoc -> <<"-moduledoc">>;
     _ -> <<"-doc">>
   end,
-  StrippedLines = lists:filtermap(fun(Line) ->
+  StrippedLines = lists:map(fun(Line) ->
     Trimmed = trim_binary(Line),
     case byte_size(Trimmed) of
-      0 -> false;
+      0 -> <<>>;
       _ ->
-        Stripped = case binary:match(Trimmed, <<".">>, [{scope, {byte_size(Trimmed) - 1, 1}}]) of
+        case binary:match(Trimmed, <<".">>, [{scope, {byte_size(Trimmed) - 1, 1}}]) of
           {_Pos, _Len} -> binary:part(Trimmed, 0, byte_size(Trimmed) - 1);
           nomatch -> Trimmed
-        end,
-        {true, Stripped}
+        end
     end
   end, Lines),
   case StrippedLines of
@@ -206,13 +205,13 @@ format_doc_attribute(Lines, Kind) ->
     [Single] ->
       case binary:match(Single, <<"\"">>) of
         {_Pos, _Len} ->
-          <<KindStr/binary, " \"\"\"\\n", Single/binary, "\\n\"\"\".">>;
+          <<KindStr/binary, " \"\"\"\n", Single/binary, "\n\"\"\".">>;
         nomatch ->
           <<KindStr/binary, " \"", Single/binary, "\".">>
       end;
     Many ->
-      Body = iolist_to_binary(lists:join(<<"\\n">>, Many)),
-      <<KindStr/binary, " \"\"\"\\n", Body/binary, "\\n\"\"\".">>
+      Body = iolist_to_binary(lists:join(<<"\n">>, Many)),
+      <<KindStr/binary, " \"\"\"\n", Body/binary, "\n\"\"\".">>
   end.
 
 %%--------------------------------------------------------------------
@@ -245,9 +244,11 @@ format_code(Content, Opts) ->
 %% Internal function to actually format code (assumes OTP >= 27).
 %%--------------------------------------------------------------------
 format_code_internal(Content, Opts) ->
-  %% Apply column alignment formatting from erlalign
-  %% In future, full @doc to -doc conversion will be added here
-  Formatted = erlalign:format(Content, Opts),
+  %% First, convert @doc blocks to -doc attributes
+  Converted = convert_doc_blocks(Content, Opts),
+  
+  %% Then apply column alignment formatting from erlalign
+  Formatted = erlalign:format(Converted, Opts),
   
   %% Remove separator lines unless explicitly kept
   KeepSeparators = proplists:get_value(keep_separators, Opts, false),
@@ -275,6 +276,184 @@ format_code_internal(Content, Opts) ->
       end,
       iolist_to_binary(lists:join(<<"\n">>, FilteredLines1))
   end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Convert all @doc blocks in content to -doc attributes.
+%%--------------------------------------------------------------------
+convert_doc_blocks(Content, Opts) ->
+  ContentBinary = case is_binary(Content) of
+    true -> Content;
+    false -> iolist_to_binary(Content)
+  end,
+  Lines = binary:split(ContentBinary, <<"\n">>, [global]),
+  Width = proplists:get_value(line_length, Opts, ?DEFAULT_LINE_LENGTH),
+  KeepSeparators = proplists:get_value(keep_separators, Opts, false),
+  ProcessedLines = process_doc_lines(Lines, Width, KeepSeparators, []),
+  iolist_to_binary(lists:join(<<"\n">>, lists:reverse(ProcessedLines))).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Process lines to find and convert @doc blocks.
+%%--------------------------------------------------------------------
+process_doc_lines([], _Width, _KeepSeparators, Acc) ->
+  Acc;
+process_doc_lines([Line | Rest], Width, KeepSeparators, Acc) ->
+  Trimmed = trim_binary(Line),
+  % Check if this line has @doc
+  case binary:match(Trimmed, <<"@doc">>) of
+    nomatch ->
+      % Not a @doc line, check if it's a separator
+      case is_separator_line(Trimmed) of
+        true when not KeepSeparators ->
+          % Skip separator unless keep_separators is true
+          process_doc_lines(Rest, Width, KeepSeparators, Acc);
+        _ ->
+          % Keep the line
+          process_doc_lines(Rest, Width, KeepSeparators, [Line | Acc])
+      end;
+    _ ->
+      % Found @doc, extract the full block
+      {TextLines, SeeRefs, RemainingLines} = extract_doc_block([Line | Rest]),
+      % Convert to -doc attribute
+      DocAttr = convert_doc_block(TextLines, SeeRefs, [{line_length, Width}]),
+      % Add to accumulator
+      AccWithDoc = [DocAttr | Acc],
+      % Skip any separator after @end if not keeping separators, and add blank line
+      {RemainingLines2, AddBlank} = case KeepSeparators of
+        true -> {RemainingLines, false};
+        false -> skip_separator_after_end_with_blank(RemainingLines)
+      end,
+      % Add blank line if a separator was removed
+      AccWithDoc2 = case AddBlank of
+        true -> [<<>> | AccWithDoc];
+        false -> AccWithDoc
+      end,
+      process_doc_lines(RemainingLines2, Width, KeepSeparators, AccWithDoc2)
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Extract a complete @doc block, including text and @see references.
+%% Returns {TextLines, SeeRefs, RemainingLines}.
+%%--------------------------------------------------------------------
+extract_doc_block([FirstLine | Rest]) ->
+  Trimmed = trim_binary(FirstLine),
+  % Determine the prefix pattern (e.g., "%% ", "%%% ")
+  Prefix = find_doc_prefix(Trimmed),
+  % Extract initial text from @doc line if present
+  InitialText = case binary:match(Trimmed, <<"@doc">>) of
+    {Pos, Len} ->
+      StartPos = Pos + Len,
+      case byte_size(Trimmed) > StartPos of
+        true ->
+          Text = binary:part(Trimmed, StartPos, byte_size(Trimmed) - StartPos),
+          TrimmedText = trim_binary(Text),
+          case byte_size(TrimmedText) > 0 of
+            true -> [TrimmedText];
+            false -> []
+          end;
+        false -> []
+      end;
+    nomatch -> []
+  end,
+  % Collect remaining doc text lines and @see references
+  {RestText, SeeRefs, RemainingLines} = collect_doc_lines(Rest, Prefix, [], []),
+  TextLines = InitialText ++ RestText,
+  {TextLines, SeeRefs, RemainingLines};
+extract_doc_block([]) ->
+  {[], [], []}.
+
+find_doc_prefix(Trimmed) ->
+  case Trimmed of
+    <<"%", "%", "%", _/binary>> -> <<"%%% ">>;
+    <<"%", "%", _/binary>> -> <<"%% ">>;
+    _ -> <<"%% ">>
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Collect lines until @end marker.
+%%--------------------------------------------------------------------
+collect_doc_lines([], _Prefix, TextAcc, SeeAcc) ->
+  {lists:reverse(TextAcc), lists:reverse(SeeAcc), []};
+collect_doc_lines([Line | Rest], Prefix, TextAcc, SeeAcc) ->
+  Trimmed = trim_binary(Line),
+  % Check if this line is the @end marker
+  case binary:match(Trimmed, <<"@end">>) of
+    nomatch ->
+      % Check if this line has @see reference
+      case binary:match(Trimmed, <<"@see">>) of
+        nomatch ->
+          % Check if line continues the doc block
+          PrefixLen = byte_size(Prefix),
+          case byte_size(Trimmed) >= PrefixLen andalso
+               binary:part(Trimmed, 0, PrefixLen) == Prefix of
+            true ->
+              % Extract text after prefix
+              TextPart = binary:part(Trimmed, PrefixLen, byte_size(Trimmed) - PrefixLen),
+              collect_doc_lines(Rest, Prefix, [TextPart | TextAcc], SeeAcc);
+            false ->
+              % Not a continuation, check if it's just the comment marker
+              case Trimmed of
+                <<"%%%">> -> collect_doc_lines(Rest, Prefix, [<<>> | TextAcc], SeeAcc);
+                <<"%%">> -> collect_doc_lines(Rest, Prefix, [<<>> | TextAcc], SeeAcc);
+                _ ->
+                  % End of block
+                  {lists:reverse(TextAcc), lists:reverse(SeeAcc), [Line | Rest]}
+              end
+          end;
+        _ ->
+          % Extract @see reference
+          SeeRef = extract_see_ref(Trimmed),
+          collect_doc_lines(Rest, Prefix, TextAcc, [SeeRef | SeeAcc])
+      end;
+    _ ->
+      % Found @end, return collected data
+      {lists:reverse(TextAcc), lists:reverse(SeeAcc), Rest}
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Extract the reference from a @see line.
+%%--------------------------------------------------------------------
+extract_see_ref(Line) ->
+  case binary:match(Line, <<"@see">>) of
+    {Pos, Len} ->
+      StartPos = Pos + Len,
+      Ref = binary:part(Line, StartPos, byte_size(Line) - StartPos),
+      Trimmed = trim_binary(Ref),
+      case is_binary(Trimmed) of
+        true -> binary:bin_to_list(Trimmed);
+        false -> Trimmed
+      end;
+    nomatch ->
+      ""
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Skip a trailing separator line after @end.
+%%--------------------------------------------------------------------
+skip_separator_after_end([Line | Rest]) ->
+  case is_separator_line(trim_binary(Line)) of
+    true -> Rest;
+    false -> [Line | Rest]
+  end;
+skip_separator_after_end([]) ->
+  [].
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Skip a trailing separator line after @end, returning whether blank was added.
+%%--------------------------------------------------------------------
+skip_separator_after_end_with_blank([Line | Rest]) ->
+  case is_separator_line(trim_binary(Line)) of
+    true -> {Rest, true};
+    false -> {[Line | Rest], false}
+  end;
+skip_separator_after_end_with_blank([]) ->
+  {[], false}.
 
 %%--------------------------------------------------------------------
 %% @doc
