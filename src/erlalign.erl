@@ -5,7 +5,6 @@
 %%% readable column-aligned formatting similar to Go's gofmt.
 %%%
 %%% @end
-
 -module(erlalign).
 
 -export([
@@ -218,6 +217,7 @@ split_on_multiline_clauses(Group, _AllLines) ->
 %% @doc
 %% Extract the function name from a clause line.
 %% Returns the function name atom or undefined if not a clause.
+%% @end
 %%--------------------------------------------------------------------
 extract_function_name(Line) ->
   %% Match pattern: func_name(...) or -module(...) or similar
@@ -226,7 +226,6 @@ extract_function_name(Line) ->
     nomatch -> undefined
   end.
 
-%% @end
 align_comments(Code) ->
   Lines   = binary:split(Code, <<"\n">>, [global]),
   Groups  = group_by_indentation(Lines),
@@ -511,9 +510,26 @@ has_arrows(Group) ->
   HasArrowLine andalso not HasSpecLine.
 
 find_eq_pos(Line) ->
-  case binary:match(Line, <<"=">>) of
-    {Pos, _} -> Pos;
-    nomatch  -> -1
+  % Find = but skip if it's part of >=, =/=, /=, etc.
+  find_eq_pos_skip_operators(Line, 0).
+
+find_eq_pos_skip_operators(Line, StartPos) ->
+  case binary:match(Line, <<"=">>, [{scope, {StartPos, byte_size(Line) - StartPos}}]) of
+    nomatch -> -1;
+    {Pos, _} ->
+      % Check if the character before is >, /, or !
+      case Pos > 0 of
+        true ->
+          PrevChar = binary:at(Line, Pos - 1),
+          case PrevChar of
+            $> -> find_eq_pos_skip_operators(Line, Pos + 1);
+            $/ -> find_eq_pos_skip_operators(Line, Pos + 1);
+            $! -> find_eq_pos_skip_operators(Line, Pos + 1);
+            _  -> Pos
+          end;
+        false ->
+          Pos
+      end
   end.
 
 find_arrow_pos(Line) ->

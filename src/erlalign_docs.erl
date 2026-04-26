@@ -19,10 +19,13 @@
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
-
 -module(erlalign_docs).
 
 -export([
+  process_file/2,
+  process_file/1,
+  format_code/2,
+  format_code/1,
   convert_doc_block/3,
   convert_doc_block/2,
   convert_doc_block/1,
@@ -33,10 +36,6 @@
   wrap_lines/2,
   format_doc_attribute/2,
   format_doc_attribute/1,
-  format_code/2,
-  format_code/1,
-  process_file/2,
-  process_file/1,
   otp_version/0,
   is_otp_version_supported/0
 ]).
@@ -290,7 +289,69 @@ convert_doc_blocks(Content, Opts) ->
   Width = proplists:get_value(line_length, Opts, ?DEFAULT_LINE_LENGTH),
   KeepSeparators = proplists:get_value(keep_separators, Opts, false),
   ProcessedLines = process_doc_lines(Lines, Width, KeepSeparators, []),
-  iolist_to_binary(lists:join(<<"\n">>, lists:reverse(ProcessedLines))).
+  ReversedLines = lists:reverse(ProcessedLines),
+  FinalLines = handle_moduledoc_placement(ReversedLines),
+  iolist_to_binary(lists:join(<<"\n">>, FinalLines)).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Handle conversion of -doc to -moduledoc when it appears before -module.
+%%--------------------------------------------------------------------
+handle_moduledoc_placement(Lines) ->
+  find_and_move_moduledoc(Lines, []).
+
+find_and_move_moduledoc([], Acc) ->
+  lists:reverse(Acc);
+find_and_move_moduledoc([Line | Rest], Acc) ->
+  Trimmed = trim_binary(Line),
+  case {is_doc_attr(Trimmed), find_module_in_rest(Rest)} of
+    {true, {found, ModuleIdx, ModuleLine}} ->
+      ModuledocLine = convert_doc_to_moduledoc(Line),
+      {BeforeModule, [_|AfterModule]} = lists:split(ModuleIdx, Rest),
+      AllLines = lists:reverse(Acc) ++ lists:reverse(BeforeModule) ++ [ModuleLine, ModuledocLine] ++ AfterModule,
+      find_and_move_moduledoc(AllLines, []);
+    _ ->
+      find_and_move_moduledoc(Rest, [Line | Acc])
+  end.
+
+is_doc_attr(Trimmed) ->
+  case binary:match(Trimmed, <<"-doc ">>) of
+    {0, _} -> true;
+    _ -> false
+  end.
+
+find_module_in_rest(Lines) ->
+  find_module_in_rest_helper(Lines, 0).
+
+find_module_in_rest_helper([], _) ->
+  false;
+find_module_in_rest_helper([Line | Rest], Idx) ->
+  Trimmed = trim_binary(Line),
+  case binary:match(Trimmed, <<"-module">>) of
+    {0, _} -> {found, Idx, Line};
+    _ -> find_module_in_rest_helper(Rest, Idx + 1)
+  end.
+
+convert_doc_to_moduledoc(DocLine) ->
+  case binary:match(DocLine, <<"-doc">>) of
+    {Pos, _} ->
+      Prefix = binary:part(DocLine, 0, Pos),
+      Suffix = binary:part(DocLine, Pos + 4, byte_size(DocLine) - Pos - 4),
+      <<Prefix/binary, "-moduledoc", Suffix/binary>>;
+    nomatch ->
+      DocLine
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Check if a line is a comment line (starts with %).
+%%--------------------------------------------------------------------
+is_comment_line(Line) ->
+  StrippedLine = string:trim(Line, leading),
+  case byte_size(StrippedLine) of
+    0 -> false;
+    _ -> binary:at(StrippedLine, 0) == $%
+  end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -300,7 +361,7 @@ process_doc_lines([], _Width, _KeepSeparators, Acc) ->
   Acc;
 process_doc_lines([Line | Rest], Width, KeepSeparators, Acc) ->
   Trimmed = trim_binary(Line),
-  % Check if this line has @doc
+  % Check if this line has @doc AND is a comment line
   case binary:match(Trimmed, <<"@doc">>) of
     nomatch ->
       % Not a @doc line, check if it's a separator
@@ -313,24 +374,44 @@ process_doc_lines([Line | Rest], Width, KeepSeparators, Acc) ->
           process_doc_lines(Rest, Width, KeepSeparators, [Line | Acc])
       end;
     _ ->
-      % Found @doc, extract the full block
-      {TextLines, SeeRefs, RemainingLines} = extract_doc_block([Line | Rest]),
-      % Convert to -doc attribute
-      DocAttr = convert_doc_block(TextLines, SeeRefs, [{line_length, Width}]),
-      % Add to accumulator
-      AccWithDoc = [DocAttr | Acc],
-      % Skip any separator after @end if not keeping separators, and add blank line
-      {RemainingLines2, AddBlank} = case KeepSeparators of
-        true -> {RemainingLines, false};
-        false -> skip_separator_after_end_with_blank(RemainingLines)
-      end,
-      % Add blank line if a separator was removed
-      AccWithDoc2 = case AddBlank of
-        true -> [<<>> | AccWithDoc];
-        false -> AccWithDoc
-      end,
-      process_doc_lines(RemainingLines2, Width, KeepSeparators, AccWithDoc2)
+      % Found @doc pattern, verify it's actually in a comment (Bug #4 fix)
+      case is_comment_line(Line) of
+        false ->
+          % @doc is in a string literal or other non-comment context, keep the line
+          process_doc_lines(Rest, Width, KeepSeparators, [Line | Acc]);
+        true ->
+          % Found @doc in a comment, extract the full block
+          {TextLines, SeeRefs, RemainingLines} = extract_doc_block([Line | Rest]),
+          % Convert to -doc attribute
+          DocAttr = convert_doc_block(TextLines, SeeRefs, [{line_length, Width}]),
+          % Add to accumulator
+          AccWithDoc = [DocAttr | Acc],
+          % Skip any separator after @end if not keeping separators, but don't add blank line
+          % unless the next non-separator line is not a function/clause start (Bug #2 fix)
+          {RemainingLines2, AddBlank} = case KeepSeparators of
+            true -> {RemainingLines, false};
+            false -> 
+              {Rest2, WasSeparator} = skip_separator_after_end_with_blank(RemainingLines),
+              % Only add blank if we removed a separator AND next line is not code
+              {Rest2, WasSeparator andalso should_add_blank_after_doc(Rest2)}
+          end,
+          % Add blank line if needed
+          AccWithDoc2 = case AddBlank of
+            true -> [<<>> | AccWithDoc];
+            false -> AccWithDoc
+          end,
+          process_doc_lines(RemainingLines2, Width, KeepSeparators, AccWithDoc2)
+      end
   end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Check if a blank line should be added after a -doc block.
+%% Never add blank lines - let the code flow naturally.
+%%--------------------------------------------------------------------
+should_add_blank_after_doc(_) ->
+  false.
+
 
 %%--------------------------------------------------------------------
 %% @doc

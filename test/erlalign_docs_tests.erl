@@ -254,6 +254,59 @@ integration_test_() ->
           Result2 = erlalign_docs:format_code(Result1, []),
           ?assertEqual(Result1, Result2)
         end
+      },
+      {"convert @doc before -module to -moduledoc after -module",
+        fun() ->
+          Code = <<"%%% @doc\n%%% A module for basic arithmetic.\n%%% @end\n-module(arith).\n">>,
+          Result = erlalign_docs:format_code(Code, []),
+          %% Result should have -moduledoc immediately after -module
+          %% Expected pattern: -module(arith).\n-moduledoc "..."
+          ?assert(binary:match(Result, <<"-module(arith).">> ) =/= nomatch),
+          ?assert(binary:match(Result, <<"-moduledoc">> ) =/= nomatch),
+          %% -moduledoc should come after -module
+          ModulePos = binary:match(Result, <<"-module(arith).">>),
+          ModuledocPos = binary:match(Result, <<"-moduledoc">>),
+          case {ModulePos, ModuledocPos} of
+            {{MPos, _}, {DPos, _}} -> ?assert(MPos < DPos);
+            _ -> ok
+          end
+        end
+      },
+      {"no extra newlines between -doc block and following function",
+        fun() ->
+          Code = <<"%%----\n%% @doc\n%% Extract the function name\n%% @end\n%%----\nextract_function_name(Line) ->\n  ok.\n">>,
+          Result = erlalign_docs:format_code(Code, []),
+          %% Result should not have blank line between -doc and function
+          %% Bad pattern: \".\n\nextract\" (double newline = blank line)
+          %% Good pattern: \".\nextract\" (single newline, no blank line)
+          HasDoubleNewline = binary:match(Result, <<".\n\nextract_function_name">>) =/= nomatch,
+          ?assert(not HasDoubleNewline),
+          %% Verify the function is still present
+          ?assert(binary:match(Result, <<"extract_function_name">> ) =/= nomatch)
+        end
+      },
+      {">= operator not split during alignment",
+        fun() ->
+          Code = <<"extract_function_name(Line) ->\n  PrevFuncName =/= undefined andalso\n  CurrentFuncName =/= PrevFuncName andalso\n  PrevFuncCount >= 2.\n">>,
+          Result = erlalign_docs:format_code(Code, []),
+          %% Result should NOT have "> =" (space inserted)
+          %% Pattern to check: "> =" should not exist
+          HasBrokenOp = binary:match(Result, <<"> =">>) =/= nomatch,
+          ?assert(not HasBrokenOp),
+          %% But ">=" should still be present
+          ?assert(binary:match(Result, <<">=">>) =/= nomatch)
+        end
+      },
+      {"@doc in string literal not converted to -doc block",
+        fun() ->
+          Code = <<"print_help() ->\n  io:format(\n    \"Options:~n\"\n    \"  --no-trim-eol-ws      Do not trim trailing whitespace~n\"\n    \"  --doc                 Convert @doc to -doc attributes (OTP 27+)~n\"\n    \"  --check               Check formatting~n\",\n    []\n  ).\n">>,
+          Result = erlalign_docs:format_code(Code, []),
+          %% Result should be identical to input since there's no real @doc tag (just text in a string)
+          %% The @doc in the string should not be processed as a documentation marker
+          ?assertEqual(Code, Result),
+          %% Verify the function is still intact
+          ?assert(binary:match(Result, <<"print_help">> ) =/= nomatch)
+        end
       }
     ]
   }.

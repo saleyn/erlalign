@@ -14,6 +14,20 @@ ErlAlign scans consecutive lines that share the same indentation and pattern typ
 - **Case/if arrows** - Aligns `->` operators in case and if expressions
 - **Function guards** - Aligns guard clauses
 
+## ⚠️ Important: Version Control Required
+
+**ErlAlign modifies your source code directly.** While it is designed to be a safe formatting tool, we strongly recommend:
+
+1. **Use version control** - Always commit your code before running ErlAlign. This allows you to easily review changes and revert if needed.
+2. **Use `--dry-run` or `--check` first** - Review what changes will be made before applying them:
+   ```bash
+   rebar3 format --dry-run src/   # Preview changes
+   rebar3 format --check src/      # Check without modifying
+   ```
+3. **Review changes** - Inspect diffs before committing formatting changes to your repository.
+
+If something goes wrong or you're unhappy with the formatting, you can always revert to your last commit.
+
 ## Features
 
 ### Record field alignment

@@ -178,7 +178,9 @@ format_docs_tests() ->
             -module(test).
             """,
           Expected = iolist_to_binary([
-            "-doc \"\"\"",
+            "-module(test).",
+            10,  % newline
+            "-moduledoc \"\"\"",
             10,  % newline
             "Tests for erlalign_docs module",
             10,  % newline
@@ -187,13 +189,10 @@ format_docs_tests() ->
             10,  % newline
             "- OTP version checking",
             10,  % newline
-            "\"\"\".",
-            10,  % newline
-            10,  % newline
-            "-module(test)."
+            "\"\"\"."
           ]),
           Result = erlalign_docs:format_code(Code, []),
-          % Code should be converted to -doc attribute
+          % Code should be converted to -moduledoc after -module
           ?assertEqual(Expected, Result)
         end
       },
@@ -212,6 +211,36 @@ format_docs_tests() ->
           %% Result should keep %%----
           HasSeparator = binary:match(Result, <<"%%----">>) =/= nomatch,
           ?assert(HasSeparator)
+        end
+      },
+      {"convert @doc before -module to -moduledoc after -module",
+        fun() ->
+          Code = <<"%%% @doc\n%%% A module for basic arithmetic.\n%%% @end\n-module(arith).\n">>,
+          Result = erlalign_docs:format_code(Code, []),
+          %% Result should have -moduledoc immediately after -module
+          %% Expected pattern: -module(arith).\n-moduledoc "..."
+          ?assert(binary:match(Result, <<"-module(arith).">> ) =/= nomatch),
+          ?assert(binary:match(Result, <<"-moduledoc">> ) =/= nomatch),
+          %% -moduledoc should come after -module
+          ModulePos = binary:match(Result, <<"-module(arith).">>),
+          ModuledocPos = binary:match(Result, <<"-moduledoc">>),
+          case {ModulePos, ModuledocPos} of
+            {{MPos, _}, {DPos, _}} -> ?assert(MPos < DPos);
+            _ -> ok
+          end
+        end
+      },
+      {"no extra newlines between -doc block and following function",
+        fun() ->
+          Code = <<"%%----\n%% @doc\n%% Extract the function name\n%% @end\n%%----\nextract_function_name(Line) ->\n  ok.\n">>,
+          Result = erlalign_docs:format_code(Code, []),
+          %% Result should not have blank line between -doc and function
+          %% Bad pattern: \".\n\nextract\" (double newline = blank line)
+          %% Good pattern: \".\nextract\" (single newline, no blank line)
+          HasDoubleNewline = binary:match(Result, <<".\n\nextract_function_name">>) =/= nomatch,
+          ?assert(not HasDoubleNewline),
+          %% Verify the function is still present
+          ?assert(binary:match(Result, <<"extract_function_name">> ) =/= nomatch)
         end
       }
     ]
