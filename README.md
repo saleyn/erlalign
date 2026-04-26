@@ -28,8 +28,8 @@ User = #user{
 
 % after (with ErlAlign)
 User = #user{
-  name = <<"Alice">>,
-  age =  30,
+  name.      = <<"Alice">>,
+  age.       =  30,
   occupation = <<"developer">>
 }.
 ```
@@ -43,8 +43,8 @@ Foo = <<"bar">>,
 SomethingLong = 42.
 
 % after
-X              = 1,
-Foo            = <<"bar">>,
+X             = 1,
+Foo           = <<"bar">>,
 SomethingLong = 42.
 ```
 
@@ -80,14 +80,14 @@ user(UserID) -> ...
 Returns the user record with the given ID.
 """.
 -spec user(id()) -> {ok, user()} | {error, atom()}.
-user(UserID) -> ...
+user(UserID)     -> ...
 ```
 
 ## Installation
 
 ### Requirements
 
-- Erlang/OTP 24 or later
+- Erlang/OTP 27 or later
 - rebar3 3.14+
 
 ### As a rebar3 plugin
@@ -264,7 +264,7 @@ Create a global config file at `~/.config/erlalign/.formatter.exs`:
 [
   {line_length, 100},
   {trim_eol_ws, true},
-  {eol_at_eof, off}
+  {eol_at_eof,  off}
 ].
 ```
 
