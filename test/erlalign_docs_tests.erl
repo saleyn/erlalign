@@ -155,6 +155,80 @@ line_breaks_test_() ->
           Result = erlalign_docs:format_code(Code, [{line_length, 80}]),
           ?assertEqual(Expected, Result)
         end
+      },
+      {"@doc without @end is still converted to -doc",
+        fun() ->
+          Code = ~"""
+          %%--------------------------------------------------------------------
+          %% @doc
+          %% Internal function to actually format code (assumes OTP >= 27).
+          %%--------------------------------------------------------------------
+          format_code_internal(Content, Opts) ->
+            %% Just remove normal separator lines
+            lists:filtermap(fun(Line) ->
+              Trimmed = trim_binary(Line),
+              case binary:match(Trimmed, <<"%%----">>) of
+                nomatch -> {true, Line};
+                _ -> false
+              end
+            end, Lines1).
+          """,
+          Expected = ~"""
+          -doc "Internal function to actually format code (assumes OTP >= 27)".
+          format_code_internal(Content, Opts) ->
+            %% Just remove normal separator lines
+            lists:filtermap(fun(Line) ->
+              Trimmed = trim_binary(Line),
+              case binary:match(Trimmed, <<"%%----">>) of
+                nomatch -> {true, Line};
+                _       -> false
+              end
+            end, Lines1).
+          """,
+          Result = erlalign_docs:format_code(Code, []),
+          ?assertEqual(Expected, Result)
+        end
+      },
+      {"@doc in string literal is not converted",
+        fun() ->
+          Code = ~"""
+          %% @doc
+          %% Internal function to actually format code (assumes OTP >= 27).
+          test() ->
+            % Check for @doc followed by space, word boundary, or end of string
+            case binary:match(CommentContent, <<"@doc">>) of
+              {0, 4} ->
+                % @doc is at position 0, check what comes after
+                case byte_size(CommentContent) of
+                  4 -> true;  % Just "@doc" at end
+                  _ ->
+                    % Check next character is word boundary (space, newline, etc)
+                    NextChar = binary:at(CommentContent, 4),
+                    NextChar == $  orelse NextChar == $\n orelse NextChar == $\t
+                end;
+              _ -> false
+            end.
+          """,
+          Expected = ~"""
+          -doc "Internal function to actually format code (assumes OTP >= 27)".
+          test() ->
+            % Check for @doc followed by space, word boundary, or end of string
+            case binary:match(CommentContent, <<"@doc">>) of
+              {0, 4} ->
+                % @doc is at position 0, check what comes after
+                case byte_size(CommentContent) of
+                  4 -> true;  % Just "@doc" at end
+                  _ ->
+                    % Check next character is word boundary (space, newline, etc)
+                    NextChar = binary:at(CommentContent, 4),
+                    NextChar == $  orelse NextChar == $\n orelse NextChar == $\t
+                end;
+              _ -> false
+            end.
+          """,
+          Result = erlalign_docs:format_code(Code, []),
+          ?assertEqual(Expected, Result)
+        end
       }
     ]
   }.

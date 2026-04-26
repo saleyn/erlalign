@@ -291,12 +291,13 @@ format_code_internal(Content, Opts) ->
         true ->
           remove_doc_separators(Lines1);
         false ->
-          %% Just remove normal separator lines
+          %% Remove only actual separator lines (not code containing separator patterns)
           lists:filtermap(fun(Line) ->
             Trimmed = trim_binary(Line),
-            case binary:match(Trimmed, <<"%%----">>) of
-              nomatch -> {true, Line};
-              _ -> false
+            % Use proper separator detection, not just string matching
+            case is_separator_line(Trimmed) of
+              true -> false;  % Remove separator lines
+              false -> {true, Line}  % Keep non-separator lines
             end
           end, Lines1)
       end,
@@ -422,25 +423,33 @@ process_doc_lines([Line | Rest], Width, KeepSeparators, Acc) ->
     true ->
       % Found @doc tag, extract the full block
       {TextLines, SeeRefs, RemainingLines} = extract_doc_block([Line | Rest]),
-      % Convert to -doc attribute
-      DocAttr = convert_doc_block(TextLines, SeeRefs, [{line_length, Width}]),
-      % Add to accumulator
-      AccWithDoc = [DocAttr | Acc],
-      % Skip any separator after @end if not keeping separators, but don't add blank line
-      % unless the next non-separator line is not a function/clause start (Bug #2 fix)
-      {RemainingLines2, AddBlank} = case KeepSeparators of
-        true -> {RemainingLines, false};
-        false -> 
-          {Rest2, WasSeparator} = skip_separator_after_end_with_blank(RemainingLines),
-          % Only add blank if we removed a separator AND next line is not code
-          {Rest2, WasSeparator andalso should_add_blank_after_doc(Rest2)}
-      end,
-      % Add blank line if needed
-      AccWithDoc2 = case AddBlank of
-        true -> [<<>> | AccWithDoc];
-        false -> AccWithDoc
-      end,
-      process_doc_lines(RemainingLines2, Width, KeepSeparators, AccWithDoc2)
+      % Check if this doc block appears to be inside a function body
+      % by looking at whether the doc line itself or remaining code is indented
+      case is_indented_doc_block(Line, RemainingLines) of
+        true ->
+          % This @doc appears inside a function body, keep it as-is
+          process_doc_lines(Rest, Width, KeepSeparators, [Line | Acc]);
+        false ->
+          % This is a top-level doc block, convert it
+          DocAttr = convert_doc_block(TextLines, SeeRefs, [{line_length, Width}]),
+          % Add to accumulator
+          AccWithDoc = [DocAttr | Acc],
+          % Skip any separator after @end if not keeping separators, but don't add blank line
+          % unless the next non-separator line is not a function/clause start (Bug #2 fix)
+          {RemainingLines2, AddBlank} = case KeepSeparators of
+            true -> {RemainingLines, false};
+            false -> 
+              {Rest2, WasSeparator} = skip_separator_after_end_with_blank(RemainingLines),
+              % Only add blank if we removed a separator AND next line is not code
+              {Rest2, WasSeparator andalso should_add_blank_after_doc(Rest2)}
+          end,
+          % Add blank line if needed
+          AccWithDoc2 = case AddBlank of
+            true -> [<<>> | AccWithDoc];
+            false -> AccWithDoc
+          end,
+          process_doc_lines(RemainingLines2, Width, KeepSeparators, AccWithDoc2)
+      end
   end.
 
 %%--------------------------------------------------------------------
@@ -651,6 +660,52 @@ is_separator_line(Line) ->
   case re:run(Trimmed, <<"^%+\\-+%*$">>) of
     {match, _} -> true;
     nomatch -> false
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc Check if a @doc block is inside a function body.
+%% It's considered inside if either the doc line itself is indented,
+%% or the code following the block is indented.
+%%--------------------------------------------------------------------
+is_indented_doc_block(DocLine, RemainingLines) ->
+  % Check if the @doc line itself is indented
+  case DocLine of
+    <<C, _/binary>> when C == 32 orelse C == 9 ->
+      % Doc line starts with space or tab, it's inside a function body
+      true;
+    _ ->
+      % Doc lineis not indented, check remaining code
+      is_indented_code(RemainingLines)
+  end.
+
+%%--------------------------------------------------------------------
+%% @doc Check if the next significant line in a list is indented.
+%% If so, it suggests the doc block is inside a function body.
+%%--------------------------------------------------------------------
+is_indented_code([]) ->
+  false;  % No code after doc block, treat as top-level
+is_indented_code([Line | Rest]) ->
+  Trimmed = trim_binary(Line),
+  case byte_size(Trimmed) =:= 0 of
+    true ->
+      % Blank line, check the next
+      is_indented_code(Rest);
+    false ->
+      case is_separator_line(Trimmed) of
+        true ->
+          % Separator line, check the next
+          is_indented_code(Rest);
+        false ->
+          % Found a significant line - check if it's indented
+          case Line of
+            <<C, _/binary>> when C == 32 orelse C == 9 ->
+              % Line starts with space or tab, it's indented
+              true;
+            _ ->
+              % Not indented
+              false
+          end
+      end
   end.
 
 %%--------------------------------------------------------------------
