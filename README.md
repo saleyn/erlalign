@@ -381,6 +381,9 @@ erlalign --doc src/
 # Keep separator lines in documentation
 erlalign --keep-separators src/
 
+# Remove separators adjacent to -doc/@doc attributes
+erlalign --remove-doc-separators src/
+
 # Suppress output
 erlalign --silent src/
 
@@ -397,6 +400,7 @@ erlalign --help
 | `--no-trim-eol-ws` | off | Keep trailing whitespace |
 | `--eol-at-eof VALUE` | off | Handle EOF newlines: `add`, `remove`, or `off` |
 | `--keep-separators` | off | Preserve `%%----` separator lines in docs |
+| `--remove-doc-separators` | off | Remove separators adjacent to -doc/@doc attributes |
 | `--doc` | off | Convert @doc to -doc attributes (OTP 27+) |
 | `--check` | off | Check mode - exit with error if unchanged needed |
 | `--dry-run` | off | Preview changes without writing files |
@@ -427,7 +431,7 @@ Use the modules directly from Erlang code:
 Formatted = erlalign:format(Code, [{line_length, 100}]),
 ok = file:write_file("src/mymodule.erl", Formatted).
 
-% Convert documentation
+% Convert documentation and remove doc separators
 erlalign_docs:process_file("src/mymodule.erl", [
   {line_length, 100},
   {remove_doc_separators, true}
@@ -436,7 +440,8 @@ erlalign_docs:process_file("src/mymodule.erl", [
 % Or with output to different file
 erlalign_docs:process_file("src/mymodule.erl", [
   {output, "src/mymodule_formatted.erl"},
-  {line_length, 80}
+  {line_length, 80},
+  {remove_doc_separators, true}
 ]).
 ```
 
@@ -459,9 +464,19 @@ Global configuration file: `~/.config/erlalign/.formatter.exs`
 
 ```erlang
 [
-  {line_length, 120}
+  {line_length, 120},
+  {trim_eol_ws, true},
+  {remove_doc_separators, false}
 ].
 ```
+
+Supported options:
+- `line_length` - Maximum line length for formatting (default: 98 for code, 80 for docs)
+- `trim_eol_ws` - Trim trailing whitespace (default: true)
+- `eol_at_eof` - Handle EOF newlines: `add`, `remove`, or `off` (default: off)
+- `keep_separators` - Preserve separator lines (default: false)
+- `remove_doc_separators` - Remove separators adjacent to -doc/@doc attributes (default: false)
+- `doc` - Convert @doc to -doc attributes in erlalign_docs module (default: false, requires OTP 27+)
 
 ## Building
 

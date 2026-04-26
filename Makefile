@@ -1,4 +1,5 @@
 .PHONY: help compile doc test cover clean publish bump-version retire-version escript escriptize install regenerate
+APP=$(shell sed -n '/application,/{s/^.*, //; s/,.*$$//; p; q}' src/*.app.src)
 
 all: compile
 
@@ -10,7 +11,7 @@ escriptize: compile
 	@rebar3 escriptize
 	@echo "✓ Binary created at _build/default/bin/erlalign"
 
-install: escript
+install: escriptize
 	@echo "Installing erlalign to /usr/local/bin/..."
 	@sudo cp _build/prod/bin/erlalign /usr/local/bin/erlalign
 	@sudo chmod +x /usr/local/bin/erlalign
@@ -78,14 +79,15 @@ bump-version:
 		exit 1; \
 	fi
 
+retire-version: VSN=$(shell mix hex.info $(APP) | grep "^Releases:" | sed 's/Releases: //; s/, /\n/g' | sed '/retired/d; /\.\.\./d' | sed -n '$$p')
 retire-version:
-	@if [ -z "$(version)" ]; then \
-		echo "Usage: make retire-version version=X.Y.Z"; \
-		exit 1; \
+	@echo "VSN: $(VSN)"
+	@if [ -z "$(VSN)" ]; then \
+		echo "$(APP): no stale versions were found on Hex"; \
+	else \
+		echo "Retiring version $(VSN) of $(APP) on Hex..."; \
+		rebar3 hex retire erlalign $(version) deprecated --message "Deprecated"; \
 	fi
-	@echo "Retiring version $(version) of erlalign on Hex..."; \
-	rebar3 hex.retire erlalign $(version) deprecated --message "Deprecated"
 
-remove-crushdump:
-	@rm -f erl_crash.dump
-
+show-versions:
+	@mix hex.info $(APP) | grep "^Releases:" | sed 's/Releases: //; s/, /\n/g' | sed '/retired/d; /\.\.\./d'
