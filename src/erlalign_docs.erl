@@ -187,29 +187,46 @@ format_doc_attribute(Lines, Kind) ->
     moduledoc -> <<"-moduledoc">>;
     _ -> <<"-doc">>
   end,
-  StrippedLines = lists:map(fun(Line) ->
+  TrimmedLines = lists:map(fun(Line) ->
     Trimmed = trim_binary(Line),
     case byte_size(Trimmed) of
       0 -> <<>>;
-      _ ->
-        case binary:match(Trimmed, <<".">>, [{scope, {byte_size(Trimmed) - 1, 1}}]) of
-          {_Pos, _Len} -> binary:part(Trimmed, 0, byte_size(Trimmed) - 1);
-          nomatch -> Trimmed
-        end
+      _ -> Trimmed
     end
   end, Lines),
-  case StrippedLines of
+  case TrimmedLines of
     [] ->
       <<KindStr/binary, " false.">>;
     [Single] ->
-      case binary:match(Single, <<"\"">>) of
-        {_Pos, _Len} ->
-          <<KindStr/binary, " \"\"\"\n", Single/binary, "\n\"\"\".">>;
+      % For single-line docs, strip trailing period before adding doc quotes
+      SingleNoTrailingPeriod = case binary:match(Single, <<".">>, [{scope, {byte_size(Single) - 1, 1}}]) of
+        nomatch -> Single;
+        _ -> binary:part(Single, 0, byte_size(Single) - 1)
+      end,
+      case binary:match(SingleNoTrailingPeriod, <<"\"">>) of
         nomatch ->
-          <<KindStr/binary, " \"", Single/binary, "\".">>
+          <<KindStr/binary, " \"", SingleNoTrailingPeriod/binary, "\".">> ;
+        _ ->
+          <<KindStr/binary, " \"\"\"\n", SingleNoTrailingPeriod/binary, "\n\"\"\".">>
       end;
-    Many ->
-      Body = iolist_to_binary(lists:join(<<"\n">>, Many)),
+    [First | Rest] ->
+      % For multi-line docs, check if there's an auto-generated "See also:" section
+      ProcessedFirst = case Rest of
+        [Second | _] ->
+          % If the next line is "See also:" section, strip period from first line
+          case binary:match(Second, <<"See also:">>) of
+            nomatch -> First;
+            _ -> 
+              case binary:match(First, <<".">>, [{scope, {byte_size(First) - 1, 1}}]) of
+                nomatch -> First;
+                _ -> binary:part(First, 0, byte_size(First) - 1)
+              end
+          end;
+        _ -> First
+      end,
+      % Rebuild the full list
+      FullLines = [ProcessedFirst | Rest],
+      Body = iolist_to_binary(lists:join(<<"\n">>, FullLines)),
       <<KindStr/binary, " \"\"\"\n", Body/binary, "\n\"\"\".">>
   end.
 

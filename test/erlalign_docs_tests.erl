@@ -142,6 +142,74 @@ wrap_lines_test_() ->
 %%% Markdown Conversion Tests
 %%%===================================================================
 
+docs_conversion_test_() ->
+  {"@docs to -doc conversion tests",
+    [
+      {"Docs block converted to multiline -doc attribute",
+        fun() ->
+          Original = ~"""
+          -module(t).
+
+          %%--------------------------------------------------------------------
+          %% @doc
+          %% Internal function to actually format code (assumes OTP >= 27).
+          %% See also other comment.
+          %%--------------------------------------------------------------------
+          format_code_internal(Content, Opts) ->
+            %% First, convert @doc blocks to -doc attributes
+            Converted = convert_doc_blocks(Content, Opts),
+            ok.
+          """,
+          Expected = ~b"""
+          -module(t).
+
+          -doc \"\"\"
+          Internal function to actually format code (assumes OTP >= 27).
+          See also other comment.
+          \"\"\".
+          format_code_internal(Content, Opts) ->
+            %% First, convert @doc blocks to -doc attributes
+            Converted = convert_doc_blocks(Content, Opts),
+            ok.
+          """,
+          Result = erlalign_docs:format_code(Original, []),
+          ?assertEqual(Expected, Result)
+        end
+      },
+      {"Docs block converted to single line -doc attribute",
+        fun() ->
+          Original = ~"""
+          -module(t).
+
+          %%--------------------------------------------------------------------
+          %% @doc
+          %% Internal function to actually format code (assumes OTP >= 27).
+          %%--------------------------------------------------------------------
+          format_code_internal(Content, Opts) ->
+            %% First, convert @doc blocks to -doc attributes
+            Converted = convert_doc_blocks(Content, Opts),
+            ok.
+          """,
+          Expected = ~b"""
+          -module(t).
+
+          -doc "Internal function to actually format code (assumes OTP >= 27)".
+          format_code_internal(Content, Opts) ->
+            %% First, convert @doc blocks to -doc attributes
+            Converted = convert_doc_blocks(Content, Opts),
+            ok.
+          """,
+          Result = erlalign_docs:format_code(Original, []),
+          ?assertEqual(Expected, Result)
+        end
+      }
+    ]
+  }.
+
+%%%===================================================================
+%%% Markdown Conversion Tests
+%%%===================================================================
+
 markdown_test_() ->
   {"Markdown conversion tests",
     [
