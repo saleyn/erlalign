@@ -99,6 +99,66 @@ separator_handling_test_() ->
     ]
   }.
 
+line_breaks_test_() ->
+  {"@doc with and without line breaks tests",
+    [
+      {"@doc with line breaks is converted to -doc",
+        fun() ->
+          Code = ~"""
+          %%----------------------------------
+          %% @doc
+          %% Test function
+          %% @end
+          %%----------------------------------
+          test() -> ok.
+          """,
+          Expected = ~"""
+          -doc "Test function".
+          test() -> ok.
+          """,
+          Result = erlalign_docs:format_code(Code, [{line_length, 80}]),
+          ?assertEqual(Expected, Result)
+        end
+      },
+      {"@doc without line breaks is converted to -doc",
+        fun() ->
+          Code = ~"""
+          %% @doc
+          %% Test function
+          %% @end
+          test() -> ok.
+          """,
+          Expected = ~"""
+          -doc "Test function".
+          test() -> ok.
+          """,
+          Result = erlalign_docs:format_code(Code, [{line_length, 80}]),
+          ?assertEqual(Expected, Result)
+        end
+      },
+      {"@doc with multiline line breaks is converted to -doc",
+        fun() ->
+          Code = ~"""
+          %% @doc
+          %% Test function
+          %% with extra line breaks.
+          %% @end
+          test() -> ok.
+          """,
+          Expected = ~b"""
+          -doc \"\"\"
+          Test function
+          with extra line breaks.
+          \"\"\".
+          test() -> ok.
+          """,
+          Result = erlalign_docs:format_code(Code, [{line_length, 80}]),
+          ?assertEqual(Expected, Result)
+        end
+      }
+    ]
+  }.
+
 %%%===================================================================
 %%% Line Wrapping Tests
 %%%===================================================================

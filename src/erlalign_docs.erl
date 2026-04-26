@@ -199,9 +199,14 @@ format_doc_attribute(Lines, Kind) ->
       <<KindStr/binary, " false.">>;
     [Single] ->
       % For single-line docs, strip trailing period before adding doc quotes
-      SingleNoTrailingPeriod = case binary:match(Single, <<".">>, [{scope, {byte_size(Single) - 1, 1}}]) of
-        nomatch -> Single;
-        _ -> binary:part(Single, 0, byte_size(Single) - 1)
+      SingleNoTrailingPeriod = case byte_size(Single) > 0 of
+        true ->
+          case binary:match(Single, <<".">>, [{scope, {byte_size(Single) - 1, 1}}]) of
+            nomatch -> Single;
+            _ -> binary:part(Single, 0, byte_size(Single) - 1)
+          end;
+        false ->
+          Single
       end,
       case binary:match(SingleNoTrailingPeriod, <<"\"">>) of
         nomatch ->
@@ -217,9 +222,14 @@ format_doc_attribute(Lines, Kind) ->
           case binary:match(Second, <<"See also:">>) of
             nomatch -> First;
             _ -> 
-              case binary:match(First, <<".">>, [{scope, {byte_size(First) - 1, 1}}]) of
-                nomatch -> First;
-                _ -> binary:part(First, 0, byte_size(First) - 1)
+              case byte_size(First) > 0 of
+                true ->
+                  case binary:match(First, <<".">>, [{scope, {byte_size(First) - 1, 1}}]) of
+                    nomatch -> First;
+                    _ -> binary:part(First, 0, byte_size(First) - 1)
+                  end;
+                false ->
+                  First
               end
           end;
         _ -> First
