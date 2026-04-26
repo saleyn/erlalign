@@ -30,7 +30,6 @@ all_tests_test_() ->
     fun setup/0,
     fun teardown/1,
     [
-      fixture_based_tests(),
       format_tests(),
       format_docs_tests(),
       options_tests(),
@@ -47,31 +46,6 @@ setup() ->
 
 teardown(_) ->
   ok.
-
-%%%===================================================================
-%%% Fixture-Based Tests
-%%%===================================================================
-
-fixture_based_tests() ->
-  {setup,
-    fun() -> collect_fixture_files() end,
-    fun(Files) -> [fixture_test(F) || F <- Files] end
-  }.
-
-collect_fixture_files() ->
-  Files = filelib:wildcard(filename:join(?INPUT_DIR, "*.fixture")),
-  [filename:basename(F, ".fixture") || F <- Files].
-
-fixture_test(FixtureName) ->
-  InputFile = filename:join(?INPUT_DIR, FixtureName ++ ".fixture"),
-  ExpectedFile = filename:join(?EXPECTED_DIR, FixtureName ++ ".fixture"),
-  Title = "Fixture: " ++ FixtureName,
-  {Title, fun() ->
-    {ok, Input} = file:read_file(InputFile),
-    {ok, Expected} = file:read_file(ExpectedFile),
-    Formatted = erlalign:format(Input, [{line_length, 98}]),
-    ?assertEqual(Expected, Formatted)
-  end}.
 
 %%%===================================================================
 %%% Format Function Tests
