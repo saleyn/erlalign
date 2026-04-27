@@ -657,6 +657,9 @@ find_sigil_close(Input, Count) when byte_size(Input) >= 2 ->
     <<_:1/binary, Rest/binary>> ->
       find_sigil_close(Rest, Count + 1)
   end;
+find_sigil_close(<<"\"">>, Count) ->
+  %% Single quote byte at end
+  {Count + 1, found};
 find_sigil_close(<<>>, _Count) ->
   nomatch.
 
