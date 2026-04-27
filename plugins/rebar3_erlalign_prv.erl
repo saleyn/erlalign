@@ -79,9 +79,9 @@ do(State) ->
   Files = case Args of
     [] ->
       % Format all Erlang files in src/ and app/*/src/
-      filelib:wildcard(filename:join([rebar_state:base_dir(State), "src", "**", "*.erl"]))
+      filelib:wildcard(filename:join(["src", "**", "*.erl"]))
       ++
-      filelib:wildcard(filename:join([rebar_state:base_dir(State), "app", "*", "src", "**", "*.erl"]));
+      filelib:wildcard(filename:join(["app", "*", "src", "**", "*.erl"]));
     _ ->
       % Format specified files/directories
       lists:flatmap(fun collect_files/1, Args)
