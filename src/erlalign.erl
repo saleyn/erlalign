@@ -21,7 +21,8 @@ readable column-aligned formatting similar to Go's gofmt
   find_arrow_pos/1,
   find_quote_close_debug/1,
   find_balanced_close_debug/3,
-  align_group/2
+  align_group/2,
+  init/1
 ]).
 
 -define(GLOBAL_CONFIG_PATH, "~/.config/erlalign/.formatter.exs").
@@ -58,6 +59,16 @@ run(Args) ->
     {error, _} = Error ->
       Error
   end.
+
+%% rebar3 plugin initialization - allows erlalign to be used as a project plugin
+%% Other projects can add to their rebar.config:
+%%   {project_plugins, [erlalign]}
+%% This delegates to the actual provider implementation in rebar3_erlalign_prv
+%% and rebar3_erlalign_docs_prv.
+-spec init(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
+init(State) ->
+  {ok, State1} = rebar3_erlalign_prv:init(State),
+  rebar3_erlalign_docs_priv:init(State1).
 
 -doc """
 Format Erlang source contents with column alignment
