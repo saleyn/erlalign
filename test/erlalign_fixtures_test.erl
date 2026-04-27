@@ -232,6 +232,34 @@ edoc_case1_test() ->
     Result = erlalign:format(Original, ?OPTS),
     ?assertEqual(Expected, Result).
 
+no_binary_alignment_test() ->
+    Original = ~b"""
+    find_doc_prefix(Trimmed) ->
+      case Trimmed of
+        <<"%", "%", "%", _/binary>> -> <<"%%% ">>;
+        <<"%", "%", _/binary>> -> <<"%% ">>;
+        <<"%", "% ->", _/binary>> -> <<"%% ">>;
+        ~"%% abc, -> \"efg, xxx\"" -> <<"%% abc">>;
+        ~b"%% cde, efg, xxx" -> <<"%% cde">>;
+        ~B"%% efg, efg, xxx" -> <<"%% efg">>;
+        _ -> <<"%% ">>
+      end.
+    """,
+    Expected = ~b"""
+    find_doc_prefix(Trimmed) ->
+      case Trimmed of
+        <<"%", "%", "%", _/binary>> -> <<"%%% ">>;
+        <<"%", "%", _/binary>>      -> <<"%% ">>;
+        <<"%", "% ->", _/binary>>   -> <<"%% ">>;
+        ~"%% abc, -> \"efg, xxx\""  -> <<"%% abc">>;
+        ~b"%% cde, efg, xxx"        -> <<"%% cde">>;
+        ~B"%% efg, efg, xxx"        -> <<"%% efg">>;
+        _                           -> <<"%% ">>
+      end.
+    """,
+    Result = erlalign:format(Original, ?OPTS),
+    ?assertEqual(Expected, Result).
+
 function_calls_test() ->
     Original = ~"""
     -module(function_calls).

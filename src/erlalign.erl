@@ -16,7 +16,12 @@ readable column-aligned formatting similar to Go's gofmt
   main/1,
   handle_eol_at_eof/2,
   trim_eol_whitespace/2,
-  set_default_trim_eol_ws/1
+  set_default_trim_eol_ws/1,
+  find_protected_regions_debug/1,
+  find_arrow_pos/1,
+  find_quote_close_debug/1,
+  find_balanced_close_debug/3,
+  align_group/2
 ]).
 
 -define(GLOBAL_CONFIG_PATH, "~/.config/erlalign/.formatter.exs").
@@ -558,9 +563,206 @@ find_eq_pos_skip_operators(Line, StartPos) ->
   end.
 
 find_arrow_pos(Line) ->
-  case binary:match(Line, <<"->">>) of
-    {Pos, _} -> Pos;
-    nomatch  -> -1
+  find_real_arrow(Line, 0).
+
+%% Skip quoted strings and find the REAL arrow (the one outside quotes)
+%% Handles both regul ar strings ("...") and sigils (~"..." which close with "")
+find_real_arrow(Line, Pos) when Pos >= byte_size(Line) - 1 ->
+  -1;
+find_real_arrow(Line, Pos) ->
+  Remaining = binary:part(Line, Pos, byte_size(Line) - Pos),
+  case Remaining of
+    %% Found an arrow
+    <<"->", _/binary>> ->
+      Pos;
+    %% Sigil detected: ~" ... the sigil ends with "" or \"
+    <<"~\"", Rest/binary>> ->
+      case find_sigil_close(Rest, 0) of
+        {Offset, found} ->
+          %% Offset is the byte position AFTER the closing quote(s)
+          %% Skip: ~" (2 bytes) + everything up to and including closing
+          find_real_arrow(Line, Pos + 2 + Offset);
+        nomatch ->
+          %% Unclosed sigil - skip the ~" and continue
+          find_real_arrow(Line, Pos + 2)
+      end;
+    %% Regular string detected: " ... "
+    <<"\"", Rest/binary>> ->
+      case find_string_close(Rest, 0) of
+        {Offset, found} ->
+          %% Offset is the byte position AFTER the closing quote
+          %% Skip: opening quote (1) + content + closing quote (already counted in Offset)
+          find_real_arrow(Line, Pos + 1 + Offset);
+        nomatch ->
+          %% Unclosed string - skip and move on
+          find_real_arrow(Line, Pos + 1)
+      end;
+    %% Otherwise move to next byte
+    <<_:1/binary, _/binary>> ->
+      find_real_arrow(Line, Pos + 1)
+  end.
+
+%% Find closing "" for a sigil (searches for two consecutive quotes)
+%% OR find closing " that's not preceded by backslash (for escaped sigils)
+find_sigil_close(<<>>, _Count) ->
+  nomatch;
+%% Two consecutive quotes - sigil end for unescaped content
+find_sigil_close(<<"\"\"", _/binary>>, Count) ->
+  %% Return position AFTER the closing "" pair
+  {Count + 2, found};
+%% Backslash-quote followed by quote: \" then " - this ends the sigil!
+find_sigil_close(<<"\\\"", Rest/binary>>, Count) ->
+  case Rest of
+    <<"\"", _/binary>> ->
+      %% This is \"" which ends the sigil!
+      %% Count points to \, Count+1 is ", Count+2 is the closing "
+      {Count + 2, found};
+    _ ->
+      %% Just an escaped quote in content, keep scanning
+      find_sigil_close(Rest, Count + 2)
+  end;
+%% Regular character - count it and continue
+find_sigil_close(<<_:1/binary, Rest/binary>>, Count) ->
+  find_sigil_close(Rest, Count + 1).
+
+%% Find closing " for a regular string (searches for a single quote)  
+find_string_close(<<>>, _Count) ->
+  nomatch;
+find_string_close(<<"\"", _/binary>>, Count) ->
+  %% Return position AFTER the closing quote
+  {Count + 1, found};
+find_string_close(<<_:1/binary, Rest/binary>>, Count) ->
+  find_string_close(Rest, Count + 1).
+
+
+%% Find all binary patterns and sigil literals that should be protected
+find_protected_regions(OrigLine, <<>>, _Pos, Protected) ->
+  Protected;
+%% Binary pattern: <<...>>
+find_protected_regions(OrigLine, <<"<<", Rest/binary>>, Pos, Protected) ->
+  %% Find closing >> accounting for nested << and >> and strings
+  case find_balanced_close(Rest, 0, false) of
+    nomatch ->
+      Protected;  %% Unclosed, skip
+    Offset ->
+      EndPos = Pos + 2 + Offset + 2,
+      Remaining = case EndPos >= byte_size(OrigLine) of
+        true  -> <<>>;
+        false -> binary:part(OrigLine, EndPos, byte_size(OrigLine) - EndPos)
+      end,
+      find_protected_regions(OrigLine, Remaining, EndPos, Protected ++ [{Pos, EndPos}])
+  end;
+%% Sigil with type letter: ~x"..."
+find_protected_regions(OrigLine, <<"~", Char:1/binary, "\"", Rest/binary>>, Pos, Protected) when
+  (Char >= <<"a">> andalso Char =< <<"z">>) orelse (Char >= <<"A">> andalso Char =< <<"Z">>) ->
+  case find_quote_close(Rest) of
+    nomatch ->
+      Protected;
+    Offset ->
+      EndPos = Pos + 3 + Offset + 1,
+      Remaining = case EndPos >= byte_size(OrigLine) of
+        true  -> <<>>;
+        false -> binary:part(OrigLine, EndPos, byte_size(OrigLine) - EndPos)
+      end,
+      find_protected_regions(OrigLine, Remaining, EndPos, Protected ++ [{Pos, EndPos}])
+  end;
+%% Sigil: ~"..."
+find_protected_regions(OrigLine, <<"~\"", Rest/binary>>, Pos, Protected) ->
+  case find_quote_close(Rest) of
+    nomatch ->
+      Protected;
+    Offset ->
+      EndPos = Pos + 2 + Offset + 1,
+      Remaining = case EndPos >= byte_size(OrigLine) of
+        true  -> <<>>;
+        false -> binary:part(OrigLine, EndPos, byte_size(OrigLine) - EndPos)
+      end,
+      find_protected_regions(OrigLine, Remaining, EndPos, Protected ++ [{Pos, EndPos}])
+  end;
+find_protected_regions(OrigLine, <<_:1/binary, Rest/binary>>, Pos, Protected) ->
+  find_protected_regions(OrigLine, Rest, Pos + 1, Protected).
+
+%% Find closing >> for binary pattern, accounting for nesting
+%% Returns byte offset from current position to >> (not including >>), or 'nomatch'
+find_balanced_close(Content, Depth, InString) when Depth < 0 ->
+  nomatch;
+find_balanced_close(<<>>, _Depth, _InString) ->
+  nomatch;
+%% Inside string - togglequotes, handle escapes
+find_balanced_close(<<"\"", Rest/binary>>, Depth, true) ->
+  case find_balanced_close(Rest, Depth, false) of
+    nomatch -> nomatch;
+    N when is_integer(N) -> N + 1
+  end;
+find_balanced_close(<<"\\", _:1/binary, Rest/binary>>, Depth, true) ->
+  case find_balanced_close(Rest, Depth, true) of
+    nomatch -> nomatch;
+    N when is_integer(N) -> N + 2
+  end;
+%% Outside string, enter string
+find_balanced_close(<<"\"", Rest/binary>>, Depth, false) ->
+  case find_balanced_close(Rest, Depth, true) of
+    nomatch -> nomatch;
+    N when is_integer(N) -> N + 1
+  end;
+%% Outside string, nested << 
+find_balanced_close(<<"<<", Rest/binary>>, Depth, false) ->
+  case find_balanced_close(Rest, Depth + 1, false) of
+    nomatch -> nomatch;
+    N when is_integer(N) -> N + 2
+  end;
+%% Success: found >>
+find_balanced_close(<<">>", _Rest/binary>>, 0, false) ->
+  0;
+%% Outside string, close nesting level
+find_balanced_close(<<">>", Rest/binary>>, Depth, false) when Depth > 0 ->
+  case find_balanced_close(Rest, Depth - 1, false) of
+    nomatch -> nomatch;
+    N when is_integer(N) -> N + 2
+  end;
+%% Regular character
+find_balanced_close(<<_:1/binary, Rest/binary>>, Depth, InString) ->
+  case find_balanced_close(Rest, Depth, InString) of
+    nomatch -> nomatch;
+    N when is_integer(N) -> N + 1
+  end.
+
+%% Find closing quote handling escapes
+find_quote_close(Content) ->
+  find_quote_close_loop(Content, 0).
+
+find_quote_close_loop(<<>>, _Count) ->
+  nomatch;
+find_quote_close_loop(<<"\"", _/binary>>, Count) ->
+  Count;
+find_quote_close_loop(<<"\\", _:1/binary, Rest/binary>>, Count) ->
+  find_quote_close_loop(Rest, Count + 2);
+find_quote_close_loop(<<_:1/binary, Rest/binary>>, Count) ->
+  find_quote_close_loop(Rest, Count + 1).
+
+%% Check if position is inside any protected region
+is_protected(Pos, ProtectedRegions) ->
+  lists:any(fun({Start, End}) -> Pos >= Start andalso Pos < End end, ProtectedRegions).
+
+%% Find first arrow outside protected regions
+find_arrow_outside_protected(Line, Pos, ProtectedRegions) when Pos >= byte_size(Line) - 1 ->
+  -1;
+find_arrow_outside_protected(Line, Pos, ProtectedRegions) ->
+  Remaining = binary:part(Line, Pos, byte_size(Line) - Pos),
+  case Remaining of
+    <<"->", _/binary>> ->
+      case is_protected(Pos, ProtectedRegions) of
+        true ->
+          %% Arrow is inside protected region, skip it
+          find_arrow_outside_protected(Line, Pos + 1, ProtectedRegions);
+        false ->
+          %% Arrow found outside protected region
+          Pos
+      end;
+    <<_:1/binary, _/binary>> ->
+      find_arrow_outside_protected(Line, Pos + 1, ProtectedRegions);
+    _ ->
+      -1
   end.
 
 align_group(Lines, GetPosFun) ->
@@ -572,7 +774,7 @@ align_group(Lines, GetPosFun) ->
     [] -> Lines;
     _  ->
       MaxPos = lists:max(ValidPositions),
-      lists:map(fun({Line, Pos}) ->
+      AlignedLines = lists:map(fun({Line, Pos}) ->
         case Pos >= 0 andalso Pos < MaxPos of
           true ->
             Pad = binary:copy(<<" ">>, MaxPos - Pos),
@@ -580,7 +782,8 @@ align_group(Lines, GetPosFun) ->
           false ->
             Line
         end
-      end, lists:zip(Lines, Positions))
+      end, lists:zip(Lines, Positions)),
+      AlignedLines
   end.
 
 inject_padding(Line, Pos, Pad) ->
@@ -623,15 +826,46 @@ has_comments(Group) ->
   lists:any(fun(Line) -> binary:match(Line, <<"%">>) =/= nomatch end, Group).
 
 find_comment_pos(Line) ->
-  case binary:match(Line, <<"%">>) of
-    {Pos, _} ->
+  %% Find the first % that is NOT inside quotes/strings
+  case find_real_percent(Line, 0) of
+    -1 -> -1;
+    Pos ->
       %% Only align if there's code before the comment (not a standalone comment)
       BeforeComment = binary:part(Line, 0, Pos),
       case string:trim(BeforeComment) of
         <<>> -> -1;      %% Standalone comment, skip alignment
         _    -> Pos      %% Real code with comment, include in alignment
+      end
+  end.
+
+%% Find a % that is outside any quoted strings
+find_real_percent(Line, Pos) when Pos >= byte_size(Line) ->
+  -1;
+find_real_percent(Line, Pos) ->
+  Remaining = binary:part(Line, Pos, byte_size(Line) - Pos),
+  case Remaining of
+    %% Found a percent sign (comment marker)
+    <<"%", _/binary>> ->
+      Pos;
+    %% Sigil ~" ... "": skip to end
+    <<"~\"", Rest/binary>> ->
+      case find_sigil_close(Rest, 0) of
+        {Offset, found} ->
+          find_real_percent(Line, Pos + 2 + Offset + 2);
+        nomatch ->
+          find_real_percent(Line, Pos + 2)
       end;
-    nomatch -> -1
+    %% Regular string "...": skip to end
+    <<"\"", Rest/binary>> ->
+      case find_string_close(Rest, 0) of
+        {Offset, found} ->
+          find_real_percent(Line, Pos + 1 + Offset + 1);
+        nomatch ->
+          find_real_percent(Line, Pos + 1)
+      end;
+    %% Otherwise move to next byte
+    <<_:1/binary, _/binary>> ->
+      find_real_percent(Line, Pos + 1)
   end.
 
 align_comment_group(Lines) ->
@@ -684,3 +918,15 @@ consult_string(Content) ->
     {error, Error, _} ->
       {error, Error}
   end.
+
+%% DEBUG: Expose protected regions for testing
+find_protected_regions_debug(Line) ->
+  find_protected_regions(Line, Line, 0, []).
+
+%% DEBUG: Expose find_quote_close for testing
+find_quote_close_debug(Content) ->
+  find_quote_close(Content).
+
+%% DEBUG: Expose find_balanced_close for testing  
+find_balanced_close_debug(Content, Depth, InString) ->
+  find_balanced_close(Content, Depth, InString).
