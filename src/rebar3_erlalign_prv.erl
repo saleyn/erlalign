@@ -1,36 +1,32 @@
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% rebar3 provider for ErlAlign column-aligning formatter.
-%%%
-%%% Provides the 'format' rebar3 command to format Erlang source code
-%%% with column alignment on top of erlfmt output.
-%%%
-%%% Usage:
-%%%   rebar3 format [options] [files]
-%%%
-%%% Options:
-%%%   --line-length N         Maximum line length (default: 98)
-%%%   --check                 Check formatting without modifying files
-%%%   --dry-run               Show what would be formatted
-%%%   -o, --output FILE       Write output to FILE instead of source (single file only)
-%%%   -s, --silent            Suppress output
-%%%   -h, --help              Show help message
-%%%
-%%% If no files or directories are specified, all .erl files in `src/` and
-%%% `app/*/src/` will be formatted.
-%%%  
-%%% Examples:
-%%%   rebar3 format                           # Format all Erlang files
-%%%   rebar3 format --line-length 120         # Format with longer lines
-%%%   rebar3 format --check src/              # Check src/ directory
-%%%   rebar3 format --dry-run src/mymodule.erl
-%%%   rebar3 format -o /tmp/output.erl src/mymodule.erl  # Save to different file
-%%%
-%%% @end
-%%%-------------------------------------------------------------------
 
 -module(rebar3_erlalign_prv).
+-moduledoc """
+rebar3 provider for ErlAlign column-aligning formatter.
 
+Provides the 'format' rebar3 command to format Erlang source code
+with column alignment on top of erlfmt output.
+
+Usage:
+rebar3 format [options] [files]
+
+Options:
+--line-length N         Maximum line length (default: 98)
+--check                 Check formatting without modifying files
+--dry-run               Show what would be formatted
+-o, --output FILE Write output to FILE instead of source (single file only)
+-s, --silent            Suppress output
+-h, --help              Show help message
+
+If no files or directories are specified, all .erl files in `src/` and
+`app/*/src/` will be formatted.
+
+Examples:
+rebar3 format                           # Format all Erlang files
+rebar3 format --line-length 120         # Format with longer lines
+rebar3 format --check src/              # Check src/ directory
+rebar3 format --dry-run src/mymodule.erl
+rebar3 format -o /tmp/output.erl src/mymodule.erl  # Save to different file
+""".
 -behaviour(provider).
 
 -export([init/1, do/1, format_error/1, provider/0]).
@@ -68,37 +64,38 @@ init(State) ->
 -spec do(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
 do(State) ->
   {ParsedOpts, Args} = rebar_state:command_parsed_args(State),
-  
+
   % Parse options
-  LineLength = proplists:get_value(line_length, ParsedOpts, 98),
-  Check = proplists:is_defined(check, ParsedOpts),
-  DryRun = proplists:is_defined(dry_run, ParsedOpts),
-  Silent = proplists:is_defined(silent, ParsedOpts),
-  
+  LineLength         = proplists:get_value(line_length, ParsedOpts, 98),
+  Check              = proplists:is_defined(check, ParsedOpts),
+  DryRun             = proplists:is_defined(dry_run, ParsedOpts),
+  Silent             = proplists:is_defined(silent, ParsedOpts),
+
   % Determine files to format
-  Files = case Args of
-    [] ->
-      % Format all Erlang files in src/ and app/*/src/
-      filelib:wildcard(filename:join(["src", "**", "*.erl"]))
-      ++
-      filelib:wildcard(filename:join(["app", "*", "src", "**", "*.erl"]));
-    _ ->
-      % Format specified files/directories
-      lists:flatmap(fun collect_files/1, Args)
-  end,
-  
+  Files =
+    case Args of
+      [] ->
+        % Format all Erlang files in src/ and app/*/src/
+        filelib:wildcard(filename:join(["src", "**", "*.erl"]))
+        ++
+        filelib:wildcard(filename:join(["app", "*", "src", "**", "*.erl"]));
+      _ ->
+        % Format specified files/directories
+        lists:flatmap(fun collect_files/1, Args)
+    end,
+
   case Files of
     [] ->
       Silent orelse rebar_api:warn("No Erlang files found to format", []),
       {ok, State};
     _ ->
       Silent orelse rebar_api:info("Formatting ~w file(s) with line length ~w...", [length(Files), LineLength]),
-      
+
       FormatOpts = [{line_length, LineLength}],
-      Result = format_files(Files, FormatOpts, Check, DryRun, Silent),
-      
+      Result     = format_files(Files, FormatOpts, Check, DryRun, Silent),
+
       case Result of
-        ok -> {ok, State};
+        ok            -> {ok, State};
         {error, Code} -> {error, Code}
       end
   end.
@@ -118,7 +115,7 @@ collect_files(Path) ->
       filelib:wildcard(filename:join([Path, "**", "*.hrl"]));
     false ->
       case filelib:is_file(Path) of
-        true -> [Path];
+        true  -> [Path];
         false -> []
       end
   end.
@@ -126,14 +123,14 @@ collect_files(Path) ->
 format_files(Files, Opts, Check, DryRun, Silent) ->
   {Status, Changed} = lists:foldl(fun(File, {StatusAcc, ChangedAcc}) ->
     case format_file(File, Opts, Check, DryRun, Silent) of
-      ok -> {StatusAcc, ChangedAcc};
+      ok      -> {StatusAcc, ChangedAcc};
       changed -> {changed, ChangedAcc + 1};
-      error -> {error, ChangedAcc}
+      error   -> {error, ChangedAcc}
     end
   end, {ok, 0}, Files),
-  
+
   case Status of
-    ok -> 
+    ok ->
       Silent orelse rebar_api:info("  No changes needed.", []),
       ok;
     changed ->
@@ -155,7 +152,7 @@ format_file(Path, Opts, Check, DryRun, Silent) ->
       try erlalign:format(Original, Opts) of
         Formatted ->
           case Formatted == Original of
-            true -> ok;
+            true  -> ok;
             false ->
               case DryRun of
                 true ->

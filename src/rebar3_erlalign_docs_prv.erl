@@ -1,30 +1,27 @@
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% rebar3 provider for ErlAlign documentation converter.
-%%%
-%%% Converts EDoc @doc blocks to OTP-27 -doc attributes in Erlang source files.
-%%%
-%%% Usage:
-%%%   rebar3 edoc-to-doc [options] [files]
-%%%
-%%% Options:
-%%%   --line-length N         Line wrap width (default: 80)
-%%%   --keep-separators       Preserve %%---- separator lines
-%%%   --check                 Check mode - fail if files would change
-%%%   --dry-run               Show changes without modifying files
-%%%   -s, --silent            Suppress output
-%%%   -h, --help              Show help message
-%%%
-%%% Examples:
-%%%   rebar3 edoc-to-doc                      # Convert all Erlang files
-%%%   rebar3 edoc-to-doc --line-length 100    # Custom line length
-%%%   rebar3 edoc-to-doc --keep-separators    # Keep separator lines
-%%%   rebar3 edoc-to-doc --dry-run src/
-%%%
-%%% @end
-%%%-------------------------------------------------------------------
 
 -module(rebar3_erlalign_docs_prv).
+-moduledoc """
+rebar3 provider for ErlAlign documentation converter.
+
+Converts EDoc @doc blocks to OTP-27 -doc attributes in Erlang source files.
+
+Usage:
+rebar3 edoc-to-doc [options] [files]
+
+Options:
+--line-length N         Line wrap width (default: 80)
+--keep-separators       Preserve %%---- separator lines
+--check                 Check mode - fail if files would change
+--dry-run               Show changes without modifying files
+-s, --silent            Suppress output
+-h, --help              Show help message
+
+Examples:
+rebar3 edoc-to-doc                      # Convert all Erlang files
+rebar3 edoc-to-doc --line-length 100    # Custom line length
+rebar3 edoc-to-doc --keep-separators    # Keep separator lines
+rebar3 edoc-to-doc --dry-run src/
+""".
 
 -behaviour(provider).
 
@@ -64,16 +61,16 @@ init(State) ->
 -spec do(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
 do(State) ->
   {ParsedOpts, Args} = rebar_state:command_parsed_args(State),
-  
+
   % Parse options
-  LineLength = proplists:get_value(line_length, ParsedOpts, 80),
-  KeepSeparators = proplists:is_defined(keep_separators, ParsedOpts),
-  Check = proplists:is_defined(check, ParsedOpts),
-  DryRun = proplists:is_defined(dry_run, ParsedOpts),
-  Silent = proplists:is_defined(silent, ParsedOpts),
-  
+  LineLength         = proplists:get_value(line_length, ParsedOpts, 80),
+  KeepSeparators     = proplists:is_defined(keep_separators, ParsedOpts),
+  Check              = proplists:is_defined(check, ParsedOpts),
+  DryRun             = proplists:is_defined(dry_run, ParsedOpts),
+  Silent             = proplists:is_defined(silent, ParsedOpts),
+
   % Determine files to convert
-  Files = case Args of
+  Files              = case Args of
     [] ->
       % Convert all Erlang files in src/
       filelib:wildcard(filename:join([rebar_state:base_dir(State), "src", "**", "*.erl"]));
@@ -81,7 +78,7 @@ do(State) ->
       % Convert specified files/directories
       lists:flatmap(fun collect_files/1, Args)
   end,
-  
+
   case Files of
     [] ->
       Silent orelse rebar_api:warn("No Erlang files found to convert", []),
@@ -89,15 +86,15 @@ do(State) ->
     _ ->
       Silent orelse rebar_api:info("Converting documentation in ~w file(s)...", [length(Files)]),
       Silent orelse rebar_api:info("  line_length: ~w, keep_separators: ~w", [LineLength, KeepSeparators]),
-      
+
       ConvertOpts = [
         {line_length, LineLength},
         {keep_separators, KeepSeparators}
       ],
       Result = convert_files(Files, ConvertOpts, Check, DryRun, Silent),
-      
+
       case Result of
-        ok -> {ok, State};
+        ok            -> {ok, State};
         {error, Code} -> {error, Code}
       end
   end.
@@ -116,7 +113,7 @@ collect_files(Path) ->
       filelib:wildcard(filename:join([Path, "**", "*.erl"]));
     false ->
       case filelib:is_file(Path) of
-        true -> [Path];
+        true  -> [Path];
         false -> []
       end
   end.
@@ -124,14 +121,14 @@ collect_files(Path) ->
 convert_files(Files, Opts, Check, DryRun, Silent) ->
   {Status, Changed} = lists:foldl(fun(File, {StatusAcc, ChangedAcc}) ->
     case convert_file(File, Opts, Check, DryRun, Silent) of
-      ok -> {StatusAcc, ChangedAcc};
+      ok      -> {StatusAcc, ChangedAcc};
       changed -> {changed, ChangedAcc + 1};
-      error -> {error, ChangedAcc}
+      error   -> {error, ChangedAcc}
     end
   end, {ok, 0}, Files),
-  
+
   case Status of
-    ok -> 
+    ok ->
       Silent orelse rebar_api:info("  No changes needed.", []),
       ok;
     changed ->
@@ -153,9 +150,9 @@ convert_file(Path, Opts, Check, DryRun, Silent) ->
       try erlalign_docs:format_code(Original, Opts) of
         Formatted ->
           if
-            Formatted == Original -> 
+            Formatted == Original ->
               ok;
-            DryRun -> 
+            DryRun ->
               Silent orelse io:format("--- ~s~n~s~n", [Path, Formatted]),
               changed;
             Check ->
