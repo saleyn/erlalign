@@ -151,23 +151,18 @@ format_file(Path, Opts, Check, DryRun, Silent) ->
     {ok, Original} ->
       try erlalign:format(Original, Opts) of
         Formatted ->
-          case Formatted == Original of
-            true  -> ok;
-            false ->
-              case DryRun of
-                true ->
-                  Silent orelse io:format("--- ~s~n~s~n", [Path, Formatted]),
-                  changed;
-                false ->
-                  case Check of
-                    true ->
-                      change;
-                    false ->
-                      file:write_file(Path, Formatted),
-                      Silent orelse rebar_api:info("  formatted: ~s", [Path]),
-                      changed
-                  end
-              end
+          if
+            Formatted == Original ->
+              ok;
+            DryRun ->
+              Silent orelse io:format("--- ~s~n~s~n", [Path, Formatted]),
+              changed;
+            Check ->
+              changed;
+            true ->
+              file:write_file(Path, Formatted),
+              Silent orelse rebar_api:info("  formatted: ~s", [Path]),
+              changed
           end
       catch
         _Error ->
