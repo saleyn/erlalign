@@ -251,7 +251,7 @@ no_binary_alignment_test() ->
         <<"%", "%", "%", _/binary>> -> <<"%%% ">>;
         <<"%", "%", _/binary>>      -> <<"%% ">>;
         <<"%", "% ->", _/binary>>   -> <<"%% ">>;
-        ~"%% abc, -> \"efg, xxx\""    -> <<"%% abc">>;
+        ~"%% abc, -> \"efg, xxx\""  -> <<"%% abc">>;
         ~b"%% cde, efg, xxx"        -> <<"%% cde">>;
         ~B"%% efg, efg, xxx"        -> <<"%% efg">>;
         _                           -> <<"%% ">>

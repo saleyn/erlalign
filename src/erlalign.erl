@@ -580,8 +580,8 @@ find_real_arrow(Line, Pos) ->
       case find_sigil_close(Rest, 0) of
         {Offset, found} ->
           %% Offset is the byte position AFTER the closing quote(s)
-          %% Skip: ~" (2 bytes) + everything up to and including closing
-          find_real_arrow(Line, Pos + 2 + Offset);
+          %% Skip: tilda+doublequote (2 bytes) + everything up to and including closing
+          find_real_arrow(Line, Pos + Offset);
         nomatch ->
           %% Unclosed sigil - skip the ~" and continue
           find_real_arrow(Line, Pos + 2)
@@ -607,23 +607,21 @@ find_real_arrow(Line, Pos) ->
 find_sigil_close(<<>>, _Count) ->
   nomatch;
 %% Two consecutive quotes - sigil end for unescaped content
-find_sigil_close(<<34, 34, _/binary>>, Count) ->  %% 34 = quote
+find_sigil_close(<<"\"\"", _/binary>>, Count) ->
   %% Return position AFTER the closing "" pair
   {Count + 2, found};
 %% Backslash-quote followed by quote: \" then " - this ends the sigil!
-find_sigil_close(<<92, 34, Rest/binary>>, Count) ->  %% 92=\, 34="
+find_sigil_close(<<"\\\"", Rest/binary>>, Count) ->
   case Rest of
-    <<34, _/binary>> ->  %% 34 = quote
+    <<"\"", _/binary>> ->
       %% This is \"" which ends the sigil!
+      %% Count is at the \, Count+1 is the escaped ", Count+2 is the closing "
+      %% Position AFTER closing quote is Count+3
       {Count + 3, found};
     _ ->
       %% Just an escaped quote in content, keep scanning
       find_sigil_close(Rest, Count + 2)
   end;
-%% Single quote alone (unescaped) - closes the sigil
-find_sigil_close(<<34, _/binary>>, Count) ->  %% 34 = quote
-  %% Found an unescaped closing quote
-  {Count + 1, found};
 %% Regular character - count it and continue
 find_sigil_close(<<_:1/binary, Rest/binary>>, Count) ->
   find_sigil_close(Rest, Count + 1).

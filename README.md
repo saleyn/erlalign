@@ -22,7 +22,7 @@ ErlAlign scans consecutive lines that share the same indentation and pattern typ
 2. **Use `--dry-run` or `--check` first** - Review what changes will be made before applying them:
    ```bash
    rebar3 format --dry-run src/   # Preview changes
-   rebar3 format --check src/      # Check without modifying
+   rebar3 format --check src/     # Check without modifying
    ```
 3. **Review changes** - Inspect diffs before committing formatting changes to your repository.
 
@@ -111,15 +111,15 @@ Add erlalign to your project's `rebar.config` to use it as a rebar3 plugin:
 #### From Hex.pm (when available)
 
 ```erlang
-{plugins, [{erlalign, "0.1.0"}]}.
+{plugins, [erlalign]}.  %% Or version specific: {erlalign, "0.1.0"}]}.
 ```
 
-#### From GitHub (recommended for latest)
+#### To install the plugin globally for all projects
 
-```erlang
-{plugins, [
-  {erlalign, {git, "https://github.com/saleyn/erlalign.git", {branch, "main"}}}
-]}.
+Put the `plugins` setting above in this file:
+
+```bash
+~/.config/rebar3/rebar.config
 ```
 
 ### Using with rebar3

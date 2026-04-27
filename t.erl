@@ -5,7 +5,8 @@ find_doc_prefix(Trimmed) ->
   case Trimmed of
     <<"%", "%", "%", _/binary>> -> <<"%%% ">>;
     <<"%", "%", _/binary>> -> <<"%% ">>;
-    ~"%% abc, \"efg, xxx\"" -> <<"%% abc">>;
+    <<"%", "% ->", _/binary>> -> <<"%% ">>;
+    ~"%% abc, -> \"efg, xxx\"" -> <<"%% abc">>;
     ~b"%% cde, efg, xxx" -> <<"%% cde">>;
     ~B"%% efg, efg, xxx" -> <<"%% efg">>;
     _ -> <<"%% ">>
