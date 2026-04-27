@@ -50,10 +50,6 @@ jobs:
       - name: Run tests
         run: rebar3 eunit
 
-      - name: Generate coverage report
-        run: rebar3 covertool generate
-        continue-on-error: true
-
       - name: Generate erlalign escript
         run: make escriptize
 
