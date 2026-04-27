@@ -86,7 +86,7 @@ init(State) ->
   
   % Register the edoc-to-doc command provider
   Provider2 = providers:create([
-    {name,        edoc_to_doc},
+    {name,        'edoc-to-doc'},
     {module,      rebar3_erlalign_docs_prv},
     {bare,        true},
     {deps,        []},

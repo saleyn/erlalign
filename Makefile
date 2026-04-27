@@ -79,14 +79,13 @@ bump-version:
 		exit 1; \
 	fi
 
-retire-version: VSN=$(shell mix hex.info $(APP) | grep "^Releases:" | sed 's/Releases: //; s/, /\n/g' | sed '/retired/d; /\.\.\./d' | sed -n '$$p')
+retire-version: VSN=$(if $(version),$(version),$(shell mix hex.info $(APP) | grep "^Releases:" | sed 's/Releases: //; s/, /\n/g' | sed '/retired/d; /\.\.\./d' | sed -n '$$p'))
 retire-version:
-	@echo "VSN: $(VSN)"
 	@if [ -z "$(VSN)" ]; then \
 		echo "$(APP): no stale versions were found on Hex"; \
 	else \
 		echo "Retiring version $(VSN) of $(APP) on Hex..."; \
-		rebar3 hex retire erlalign $(version) deprecated --message "Deprecated"; \
+		rebar3 hex retire erlalign $(VSN) deprecated --message "Deprecated"; \
 	fi
 
 show-versions:
