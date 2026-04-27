@@ -636,7 +636,7 @@ find_string_close(<<_:1/binary, Rest/binary>>, Count) ->
 
 
 %% Find all binary patterns and sigil literals that should be protected
-find_protected_regions(OrigLine, <<>>, _Pos, Protected) ->
+find_protected_regions(_OrigLine, <<>>, _Pos, Protected) ->
   Protected;
 %% Binary pattern: <<...>>
 find_protected_regions(OrigLine, <<"<<", Rest/binary>>, Pos, Protected) ->
@@ -684,7 +684,7 @@ find_protected_regions(OrigLine, <<_:1/binary, Rest/binary>>, Pos, Protected) ->
 
 %% Find closing >> for binary pattern, accounting for nesting
 %% Returns byte offset from current position to >> (not including >>), or 'nomatch'
-find_balanced_close(Content, Depth, InString) when Depth < 0 ->
+find_balanced_close(_Content, _Depth, _InString) when _Depth < 0 ->
   nomatch;
 find_balanced_close(<<>>, _Depth, _InString) ->
   nomatch;
@@ -739,31 +739,6 @@ find_quote_close_loop(<<"\\", _:1/binary, Rest/binary>>, Count) ->
   find_quote_close_loop(Rest, Count + 2);
 find_quote_close_loop(<<_:1/binary, Rest/binary>>, Count) ->
   find_quote_close_loop(Rest, Count + 1).
-
-%% Check if position is inside any protected region
-is_protected(Pos, ProtectedRegions) ->
-  lists:any(fun({Start, End}) -> Pos >= Start andalso Pos < End end, ProtectedRegions).
-
-%% Find first arrow outside protected regions
-find_arrow_outside_protected(Line, Pos, ProtectedRegions) when Pos >= byte_size(Line) - 1 ->
-  -1;
-find_arrow_outside_protected(Line, Pos, ProtectedRegions) ->
-  Remaining = binary:part(Line, Pos, byte_size(Line) - Pos),
-  case Remaining of
-    <<"->", _/binary>> ->
-      case is_protected(Pos, ProtectedRegions) of
-        true ->
-          %% Arrow is inside protected region, skip it
-          find_arrow_outside_protected(Line, Pos + 1, ProtectedRegions);
-        false ->
-          %% Arrow found outside protected region
-          Pos
-      end;
-    <<_:1/binary, _/binary>> ->
-      find_arrow_outside_protected(Line, Pos + 1, ProtectedRegions);
-    _ ->
-      -1
-  end.
 
 align_group(Lines, GetPosFun) ->
   Positions = lists:map(GetPosFun, Lines),
