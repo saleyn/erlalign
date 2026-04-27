@@ -63,12 +63,44 @@ run(Args) ->
 %% rebar3 plugin initialization - allows erlalign to be used as a project plugin
 %% Other projects can add to their rebar.config:
 %%   {project_plugins, [erlalign]}
-%% This delegates to the actual provider implementation in rebar3_erlalign_prv
-%% and rebar3_erlalign_docs_prv.
+%% This registers the 'format' and 'edoc-to-doc' rebar3 commands.
 -spec init(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
 init(State) ->
-  {ok, State1} = rebar3_erlalign_prv:init(State),
-  rebar3_erlalign_docs_priv:init(State1).
+  % Register the format command provider
+  Provider1 = providers:create([
+    {name,        format},
+    {module,      rebar3_erlalign_prv},
+    {bare,        true},
+    {deps,        [compile]},
+    {desc,        "Format Erlang code with column alignment"},
+    {short_desc,  "Format Erlang code"},
+    {example,     "rebar3 format"},
+    {opts,        [
+      {line_length,   $l, "line-length", {integer, 98}, "Line length for alignment (default: 98)"},
+      {check,         $c, "check",       undefined,     "Check mode - fail if files would change"},
+      {dry_run,       $d, "dry-run",     undefined,     "Show changes without modifying files"},
+      {silent,        $s, "silent",      undefined,     "Suppress output"}
+    ]}
+  ]),
+  State1 = rebar_state:add_provider(State, Provider1),
+  
+  % Register the edoc-to-doc command provider
+  Provider2 = providers:create([
+    {name,        edoc_to_doc},
+    {module,      rebar3_erlalign_docs_prv},
+    {bare,        true},
+    {deps,        []},
+    {desc,        "Convert EDoc @doc blocks to OTP-27 -doc attributes"},
+    {short_desc,  "Convert documentation format"},
+    {example,     "rebar3 edoc-to-doc"},
+    {opts,        [
+      {check,          $c, "check",           undefined, "Check mode - fail if files would change"},
+      {dry_run,        $d, "dry-run",         undefined, "Show changes without modifying files"},
+      {keep_seps,      $k, "keep-separators", undefined, "Keep separator lines"},
+      {silent,         $s, "silent",          undefined, "Suppress output"}
+    ]}
+  ]),
+  {ok, rebar_state:add_provider(State1, Provider2)}.
 
 -doc """
 Format Erlang source contents with column alignment
