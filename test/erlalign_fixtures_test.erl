@@ -233,7 +233,7 @@ edoc_case1_test() ->
     ?assertEqual(Expected, Result).
 
 no_binary_alignment_test() ->
-    Original = ~b"""
+    Original = ~B"""
     find_doc_prefix(Trimmed) ->
       case Trimmed of
         <<"%", "%", "%", _/binary>> -> <<"%%% ">>;
@@ -245,7 +245,7 @@ no_binary_alignment_test() ->
         _ -> <<"%% ">>
       end.
     """,
-    Expected = ~b"""
+    Expected = ~B"""
     find_doc_prefix(Trimmed) ->
       case Trimmed of
         <<"%", "%", "%", _/binary>> -> <<"%%% ">>;

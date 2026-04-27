@@ -579,8 +579,7 @@ find_real_arrow(Line, Pos) ->
     <<"~\"", Rest/binary>> ->
       case find_sigil_close(Rest, 0) of
         {Offset, found} ->
-          %% Offset is the byte position AFTER the closing quote(s)
-          %% Skip: ~" (2 bytes) + everything up to and including closing
+          %% Skip past the entire sigil: ~" (2 bytes) + content + closing
           find_real_arrow(Line, Pos + 2 + Offset);
         nomatch ->
           %% Unclosed sigil - skip the ~" and continue
@@ -604,26 +603,24 @@ find_real_arrow(Line, Pos) ->
 
 %% Find closing "" for a sigil (searches for two consecutive quotes)
 %% OR find closing " that's not preceded by backslash (for escaped sigils)
-find_sigil_close(<<>>, _Count) ->
-  nomatch;
-%% Two consecutive quotes - sigil end for unescaped content
-find_sigil_close(<<"\"\"", _/binary>>, Count) ->
-  %% Return position AFTER the closing "" pair
-  {Count + 2, found};
-%% Backslash-quote followed by quote: \" then " - this ends the sigil!
-find_sigil_close(<<"\\\"", Rest/binary>>, Count) ->
-  case Rest of
-    <<"\"", _/binary>> ->
-      %% This is \"" which ends the sigil!
-      %% Count points to \, Count+1 is ", Count+2 is the closing "
+find_sigil_close(Input, Count) when byte_size(Input) >= 2 ->
+  case Input of
+    <<"\"\"", _/binary>> ->
+      %% Two consecutive quotes - this is the closing of the sigil
+      %% With ~B format, backslashes are preserved, so need proper offset
       {Count + 2, found};
-    _ ->
-      %% Just an escaped quote in content, keep scanning
-      find_sigil_close(Rest, Count + 2)
+    <<"\\\"", Rest/binary>> ->
+      case Rest of
+        <<"\"", _/binary>> ->
+          {Count + 6, found};
+        _ ->
+          find_sigil_close(Rest, Count + 1)
+      end;
+    <<_:1/binary, Rest/binary>> ->
+      find_sigil_close(Rest, Count + 1)
   end;
-%% Regular character - count it and continue
-find_sigil_close(<<_:1/binary, Rest/binary>>, Count) ->
-  find_sigil_close(Rest, Count + 1).
+find_sigil_close(<<>>, _Count) ->
+  nomatch.
 
 %% Find closing " for a regular string (searches for a single quote)  
 find_string_close(<<>>, _Count) ->
