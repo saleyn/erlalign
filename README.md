@@ -277,7 +277,7 @@ make check-fmt       # Check formatting
 
 #### Configuration per project
 
-Create a global config file at `~/.config/erlalign/.formatter.exs`:
+Create a global config file at `~/.config/erlalign/.formatter.config`:
 
 ```erlang
 [
@@ -428,7 +428,7 @@ erlalign --help
 
 #### Global configuration
 
-The binary supports global configuration via `~/.config/erlalign/.formatter.exs`:
+The binary supports global configuration via `~/.config/erlalign/.formatter.config`:
 
 ```erlang
 [
@@ -469,7 +469,7 @@ erlalign_docs:process_file("src/mymodule.erl", [
 **erlalign module:**
 - `format(Code)` - Format code with default options
 - `format(Code, Options)` - Format code with options
-- `load_global_config()` - Load global configuration from ~/.config/erlalign/.formatter.exs
+- `load_global_config()` - Load global configuration from ~/.config/erlalign/.formatter.config
 
 **erlalign_docs module:**
 - `format_code(Code)` - Convert doc blocks in code
@@ -479,7 +479,7 @@ erlalign_docs:process_file("src/mymodule.erl", [
 
 #### Configuration
 
-Global configuration file: `~/.config/erlalign/.formatter.exs`
+Global configuration file: `~/.config/erlalign/.formatter.config`
 
 ```erlang
 [

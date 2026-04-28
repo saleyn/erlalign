@@ -12,7 +12,10 @@ readable column-aligned formatting similar to Go's gofmt
   align_variable_assignments/1,
   align_case_arrows/1,
   align_comments/1,
+  load_config/0,
+  load_config/1,
   load_global_config/0,
+  load_local_config/0,
   main/1,
   handle_eol_at_eof/2,
   trim_eol_whitespace/2,
@@ -25,7 +28,8 @@ readable column-aligned formatting similar to Go's gofmt
   init/1
 ]).
 
--define(GLOBAL_CONFIG_PATH, "~/.config/erlalign/.formatter.exs").
+-define(GLOBAL_CONFIG_PATH, "~/.config/erlalign/.formatter.config").
+-define(LOCAL_CONFIG_PATH, ".formatter.config").
 -define(DEFAULT_LINE_LENGTH, 98).
 -define(SUPPORTED_OPTS, [line_length, eol_at_eof, keep_separators, doc, remove_doc_separators, trim_eol_ws]).
 
@@ -103,23 +107,27 @@ init(State) ->
   {ok, rebar_state:add_provider(State1, Provider2)}.
 
 -doc """
-Format Erlang source contents with column alignment
-Opts may include:
+Format Erlang source contents with column alignment.
+Options are merged from three sources with the following precedence:
+1. Opts argument (highest priority)
+2. Local config from .formatter.config in current directory
+3. Global config from ~/.config/erlalign/.formatter.config (lowest priority)
+
+Supported options:
 - `line_length` (integer, default 98): Maximum line length for alignment
 - `eol_at_eof` (`:add`, `:remove`, or `nil`, default `nil`):
-Controls end-of-file newline handling
-With `:add`, a trailing newline is added if not present
-With `:remove`, any trailing newline is removed
-With `nil`, the end-of-file newline is left unchanged
-- `keep_separators` (boolean, default `false`):
-- `trim_eol_ws` (boolean, default `true`):
-When `true`, trim trailing whitespace from end of lines
+    Controls end-of-file newline handling
+    - `:add`: add trailing newline if not present
+    - `:remove`: remove all trailing newlines
+    - `nil`: leave end-of-file newline unchanged
+- `keep_separators` (boolean, default `false`): Preserve separator lines
+- `trim_eol_ws` (boolean, default `true`): Trim trailing whitespace from lines
 """.
 format(Contents) ->
   format(Contents, []).
 
 format(Contents, Opts) ->
-  MergedOpts  = lists:append(load_global_config(), validate_options(Opts)),
+  MergedOpts  = load_config(Opts),
   Aligned1    = align_variable_assignments(Contents),
   Aligned2    = align_case_arrows(Aligned1),
   Aligned3    = align_comments(Aligned2),
@@ -280,22 +288,63 @@ align_comments(Code) ->
   end, Groups),
   binary:list_to_bin(lists:join(<<"\n">>, Aligned)).
 
--doc "Load global configuration from ~/.config/erlalign/.formatter.exs".
+-doc "Merge options with precedence: Opts > Local config > Global config".
+merge_opts(Opts, LocalConfig, GlobalConfig) ->
+  %% Use maps for efficient merging with clear precedence
+  %% maps:merge keeps values from the right argument (higher priority)
+  GlobalMap = maps:from_list(GlobalConfig),
+  LocalMap  = maps:merge(GlobalMap, maps:from_list(LocalConfig)),
+  MergedMap = maps:merge(LocalMap, maps:from_list(Opts)),
+  maps:to_list(MergedMap).
+
+-doc """
+Load local configuration from .formatter.config in the current directory.
+Returns a list of options or empty list if file not found or invalid.
+""".
+load_local_config() ->
+  load_config_file(?LOCAL_CONFIG_PATH).
+
+-doc "Helper for configuration validation: ensure parse result is a keyword list".
+ensure_list({ok, Config}) when is_list(Config) ->
+  {ok, Config};
+ensure_list({ok, _}) ->
+  {error, "must be a keyword list"};
+ensure_list({error, _}) ->
+  {error, "could not parse"}.
+
+-doc """
+Load and merge configuration options from local config merged with global config
+""".
+load_config() -> load_config([]).
+
+-doc """
+Load and merge configuration options from CLI, local config, and global config
+with correct precedence
+""".
+load_config(Opts) ->
+  GlobalConfig = load_global_config(),
+  LocalConfig  = load_local_config(),
+  merge_opts(Opts, LocalConfig, GlobalConfig).
+
+-doc """
+Load global configuration from ~/.config/erlalign/.formatter.config.
+Returns a list of options or empty list if file not found or invalid.
+""".
 load_global_config() ->
-  Path = expand_tilde(?GLOBAL_CONFIG_PATH),
-  case file:read_file(Path) of
-    {ok, Content} ->
-      case consult_string(Content) of
-        {ok, Config} when is_list(Config) ->
-          validate_options(Config);
-        {error, _} ->
-          io:format(standard_error, "erlalign: could not parse ~s~n", [Path]),
-          [];
-        _ ->
-          io:format(standard_error, "erlalign: ~s must be a keyword list~n", [Path]),
-          []
-      end;
-    {error, enoent} ->
+  load_config_file(?GLOBAL_CONFIG_PATH).
+
+-doc "Load and parse configuration from a file path (expands ~ to HOME)".
+load_config_file(RelPath) ->
+  Path = expand_tilde(RelPath),
+  maybe
+    {ok, Content} ?= file:read_file(Path),
+    ParseResult ?= consult_string(Content),
+    {ok, Config} ?= ensure_list(ParseResult),
+    validate_options(Config)
+  else
+    {error, enoent} -> [];
+    {error, Reason} when is_list(Reason) ->
+      io:format(standard_error, "erlalign: could not load ~s: ~s~n", [Path, Reason]),
       [];
     {error, Reason} ->
       io:format(standard_error, "erlalign: could not load ~s: ~w~n", [Path, Reason]),
@@ -386,7 +435,9 @@ print_help() ->
     "  --dry-run             Print would-be changes without writing~n"
     "  -s, --silent          Suppress stdout output~n"
     "  -h, --help            Print this help~n~n"
-    "Global configuration: ~s/.config/erlalign/.formatter.exs~n",
+    "Configuration (precedence: CLI > Local > Global):~n"
+    "  Local:  .formatter.config (in current directory)~n"
+    "  Global: ~s/.config/erlalign/.formatter.config~n",
     [filename:basename(escript:script_name()), "|", "dir> [<file|dir> ...]", "~"]
   ).
 
@@ -524,7 +575,7 @@ trim_eol_whitespace(Code, Opts) ->
   end.
 
 validate_options(Opts) ->
-  validate_options(Opts, ".formatter.exs").
+  validate_options(Opts, ".formatter.config").
 
 validate_options(Opts, Source) ->
   {Valid, Invalid} = proplists:split(Opts, ?SUPPORTED_OPTS),
