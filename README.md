@@ -43,7 +43,7 @@ User = #user{
 % after (with ErlAlign)
 User = #user{
   name       = <<"Alice">>,
-  age        =  30,
+  age        = 30,
   occupation = <<"developer">>
 }.
 ```
