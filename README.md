@@ -113,7 +113,7 @@ Add erlalign to your project's `rebar.config` to use it as a rebar3 plugin:
 #### From Hex.pm (when available)
 
 ```erlang
-{plugins, [erlalign]}.  %% Or version specific: {erlalign, "0.1.0"}]}.
+{plugins, [erlalign]}.  %% Or version specific: {erlalign, "0.1.5"}]}.
 ```
 
 #### To install the plugin globally for all projects
@@ -283,7 +283,7 @@ Create a global config file at `~/.config/erlalign/.formatter.exs`:
 [
   {line_length, 100},
   {trim_eol_ws, true},
-  {eol_at_eof, off}
+  {eol_at_eof,  off}
 ].
 ```
 
